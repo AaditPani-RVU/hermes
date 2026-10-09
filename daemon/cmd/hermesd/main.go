@@ -273,6 +273,28 @@ func registerMethods(srv *rpc.Server, core *wa.Core, st *hs.Store, openUI func(s
 		}
 		return nil, core.Snooze(ctx, p.Chat, p.Until, p.Msg)
 	})
+	h("messages.transcribe", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[msgParam](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.QueueTranscription(ctx, p.Chat, p.ID)
+	})
+	h("transcribe.get", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		ok, model := core.WhisperInstalled()
+		return map[string]any{"installed": ok, "model": model, "enabled": st.GetKV(ctx, "transcribe") != "off"}, nil
+	})
+	h("transcribe.set", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Enabled bool }](raw)
+		if err != nil {
+			return nil, err
+		}
+		v := "on"
+		if !p.Enabled {
+			v = "off"
+		}
+		return nil, st.SetKV(ctx, "transcribe", v)
+	})
 	h("chats.unread", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		c, m, err := st.TotalUnread(ctx)
 		return map[string]int{"chats": c, "messages": m}, err

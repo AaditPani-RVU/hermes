@@ -426,6 +426,14 @@ Rectangle {
             onTriggered: { msgMenu.close(); Hermes.act("messages.star", { chat: Hermes.currentChat, id: msgMenu.msg.id, value: !msgMenu.msg.starred }); }
         }
         MenuItemRow {
+            readonly property var ex: { try { return JSON.parse(msgMenu.msg.extra || "{}"); } catch (e) { return {}; } }
+            visible: (msgMenu.msg.type === "voice" || msgMenu.msg.type === "audio") && !msgMenu.msg.revoked && ex.transcript !== "pending"
+            height: visible ? 42 : 0
+            icon: "subtitles"
+            text: msgMenu.msg.text ? "Transcribe again" : "Transcribe"
+            onTriggered: { msgMenu.close(); Hermes.act("messages.transcribe", { chat: Hermes.currentChat, id: msgMenu.msg.id }); }
+        }
+        MenuItemRow {
             icon: "alarm"
             text: "Remind me about this…"
             onTriggered: { msgMenu.close(); pane.snoozeRequested(msgMenu.msg.id); }

@@ -19,6 +19,7 @@ import (
 	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 	"rsc.io/qr"
@@ -63,6 +64,9 @@ type Core struct {
 	uiFocus   string // chat currently open in a focused UI window
 	recording *recording
 	nameCache map[types.JID]string
+
+	transcribeQ chan transcribeJob
+	mediaWait   map[string]chan *events.MediaRetry // message ID -> waiter for a re-upload
 }
 
 func New(log waLog.Logger, paths Paths, db *sql.DB, st *hs.Store) (*Core, error) {
@@ -83,6 +87,9 @@ func New(log waLog.Logger, paths Paths, db *sql.DB, st *hs.Store) (*Core, error)
 		container: container,
 		state:     "starting",
 		nameCache: map[types.JID]string{},
+
+		transcribeQ: make(chan transcribeJob, 256),
+		mediaWait:   map[string]chan *events.MediaRetry{},
 	}
 	return c, nil
 }
@@ -175,6 +182,7 @@ func (c *Core) Start(ctx context.Context) error {
 	c.cli.EnableAutoReconnect = true
 	go c.versionWatcher(ctx)
 	go c.schedulerLoop(ctx)
+	go c.transcribeLoop(ctx)
 
 	if err := c.connect(ctx); err != nil {
 		return err

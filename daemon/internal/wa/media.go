@@ -67,6 +67,9 @@ func (c *Core) DownloadMedia(ctx context.Context, chat, id string) (string, erro
 		return "", err
 	}
 	data, err := c.cli.DownloadAny(ctx, &msg)
+	if isExpiredMedia(err) {
+		data, err = c.retryMedia(ctx, m, &msg)
+	}
 	if err != nil {
 		return "", fmt.Errorf("download: %w", err)
 	}

@@ -14,7 +14,7 @@ go build -o bin/hermes ./cmd/hermes
 echo "→ installing to ~/.local"
 mkdir -p "$HOME/.local/bin" "$HOME/.local/share/hermes" "$HOME/.local/share/applications" \
          "$HOME/.local/share/icons/hicolor/scalable/apps" "$HOME/.config/systemd/user"
-install -m 755 bin/hermesd bin/hermes "$REPO/packaging/hermes-ui" "$REPO/packaging/hermes-update" "$HOME/.local/bin/"
+install -m 755 bin/hermesd bin/hermes "$REPO/packaging/hermes-ui" "$REPO/packaging/hermes-update" "$REPO/packaging/hermes-whisper-setup" "$HOME/.local/bin/"
 # UI is symlinked so edits in the repo apply on next launch.
 ln -sfn "$REPO/ui" "$HOME/.local/share/hermes/ui"
 install -m 644 "$REPO/packaging/hermes.desktop" "$HOME/.local/share/applications/hermes.desktop"

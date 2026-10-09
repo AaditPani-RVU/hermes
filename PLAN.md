@@ -293,6 +293,21 @@ the home view groups chats by what they need from you, and chats are cleared, no
   header says "N need you · M FYI" / "Inbox zero", middle-click = done. Clavis must be restarted to load it
   (inotify watch limit is exhausted on this machine, so Quickshell can't hot-reload).
 
+### 2026-10-09: Phase B (1) voice-note transcription
+- `wa/transcribe.go`: a single background worker runs whisper.cpp (`nice`, half the cores) on incoming voice notes after
+  auto-download; `messages.transcribe` for older ones; `transcribe.get/set` (kv `transcribe=off` disables).
+  The transcript is stored as the message's `text` (voice notes never have text), so FTS, `Preview()` ("🎤 words")
+  and the inbox get it for free; state lives in `extra.transcript` = pending | done | failed. Pending jobs requeue on restart.
+  Non-speech tags ([BLANK_AUDIO], (music), *laughs*) are stripped.
+- `packaging/hermes-whisper-setup [--cuda]`: builds whisper.cpp v1.9.5 into `~/.local/share/hermes/whisper`.
+  With `--cuda`: GPU build + large-v3-turbo-q5_0 as `default.bin`, plus a CPU build + small-q5_1 as `fallback.bin`
+  that the daemon retries on GPU failure. Benchmark (Ryzen 5600H / GTX 1650, 11 s clip): CPU small 5.5 s,
+  CPU turbo 26 s, CUDA turbo 5.6 s. This machine uses the CUDA setup.
+- `wa/mediaretry.go`: downloads that 404/410 (expired on WhatsApp's CDN) send a media-retry receipt asking the phone to
+  re-upload, under both the PN and LID form of the chat, and wait 45 s for `events.MediaRetry`; the new direct path is saved
+  to `raw`. **Untested end to end:** the first tries got no reply from the phone (probably asleep); retest with WhatsApp open on it.
+- UI: transcript under the voice player (quoted), "Transcribing…" / "Couldn't transcribe · Retry", Transcribe in the message menu.
+
 **Not done yet / next:**
 - [x] First real pairing (2026-10-09): QR link works
 - [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)

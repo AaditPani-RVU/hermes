@@ -23,6 +23,8 @@ func (c *Core) handleEvent(rawEvt any) {
 		c.handleMessage(ctx, evt, true, -1)
 	case *events.HistorySync:
 		c.handleHistory(ctx, evt.Data)
+	case *events.MediaRetry:
+		c.handleMediaRetry(evt)
 	case *events.Receipt:
 		c.handleReceipt(ctx, evt)
 	case *events.ChatPresence:
@@ -311,7 +313,9 @@ func (c *Core) handleMessage(ctx context.Context, evt *events.Message, live bool
 				go func() {
 					if _, err := c.DownloadMedia(context.Background(), chat, m.ID); err != nil {
 						c.Log.Warnf("auto-download %s: %v", m.ID, err)
+						return
 					}
+					c.autoTranscribe(context.Background(), m)
 				}()
 			}
 		}

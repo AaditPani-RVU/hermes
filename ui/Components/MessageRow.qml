@@ -56,6 +56,8 @@ Item {
     readonly property var extraObj: { try { return extra ? JSON.parse(extra) : ({}); } catch (e) { return {}; } }
     readonly property bool bare: (type === "sticker" || (type === "text" && F.isJumboEmoji(text))) && !quotedId && !revoked
     readonly property bool isMedia: (type === "image" || type === "video" || type === "gif") && !revoked
+    readonly property bool isAudio: type === "voice" || type === "audio"
+    readonly property string transcriptState: isAudio ? (extraObj.transcript || "") : ""
     // Something aimed at you: an @-mention or a reply to your message.
     readonly property bool forMe: !fromMe && !revoked && (quotedSender === "You" || /(^|\s)@You\b/.test(text))
     readonly property string displayName: fromMe ? "You" : isGroup ? senderName : (chatName || senderName)
@@ -286,7 +288,35 @@ Item {
                     }
                 }
 
-                // Text body (captions too)
+                // Voice notes: transcription progress (the transcript itself is the body below)
+                Row {
+                    visible: root.transcriptState === "pending" || (root.transcriptState === "failed" && root.text === "")
+                    spacing: 6
+                    Icon {
+                        name: root.transcriptState === "pending" ? "graphic_eq" : "error"
+                        size: 16
+                        color: root.transcriptState === "pending" ? Theme.primary : Theme.error
+                        anchors.verticalCenter: parent.verticalCenter
+                        SequentialAnimation on opacity {
+                            running: root.transcriptState === "pending"
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.3; duration: 600 }
+                            NumberAnimation { to: 1; duration: 600 }
+                        }
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        textFormat: Text.StyledText
+                        text: root.transcriptState === "pending" ? "Transcribing…" : "Couldn't transcribe · <a href='retry'>Retry</a>"
+                        linkColor: Theme.primary
+                        color: Theme.fgSurfaceVariant
+                        font.family: Theme.font
+                        font.pixelSize: 13
+                        onLinkActivated: Hermes.act("messages.transcribe", { chat: root.chat, id: root.id })
+                    }
+                }
+
+                // Text body (captions too; the transcript for voice notes)
                 TextEdit {
                     id: body
                     visible: (root.text !== "" && root.type !== "poll" && root.type !== "contact" && root.type !== "location") || root.revoked
@@ -295,16 +325,17 @@ Item {
                     selectByMouse: true
                     wrapMode: TextEdit.Wrap
                     textFormat: TextEdit.RichText
-                    color: root.revoked ? Theme.fgSurfaceVariant : Theme.fgSurface
+                    color: root.revoked || root.isAudio ? Theme.fgSurfaceVariant : Theme.fgSurface
                     selectionColor: Theme.primary
                     selectedTextColor: Theme.fgPrimary
                     font.family: Theme.font
-                    font.pixelSize: root.bare ? 40 : 15
+                    font.pixelSize: root.bare ? 40 : root.isAudio ? 14 : 15
                     font.italic: root.revoked
                     readonly property string suffix: (root.edited && !root.revoked ? " <span style='font-size:11px; color:" + Theme.fgSurfaceVariant + "'>(edited)</span>" : "")
                         + (root.starred ? " <span style='font-size:12px; color:" + Theme.tertiary + "'>★</span>" : "")
                     text: root.revoked
                         ? (root.fromMe ? "You deleted this message" : "This message was deleted")
+                        : root.isAudio ? "<span style='color:" + Theme.primary + "'>“</span>" + F.escapeHtml(root.text) + "<span style='color:" + Theme.primary + "'>”</span>"
                         : F.richText(root.text, Theme.primary, Theme.alpha(Theme.fgSurface, 0.1)) + suffix
                     onLinkActivated: link => Qt.openUrlExternally(link)
                     HoverHandler {

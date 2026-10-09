@@ -1,0 +1,67 @@
+#!/bin/sh
+# Build whisper.cpp and fetch speech models for Hermes' voice-note transcription.
+# Everything stays local: audio never leaves this machine.
+#
+#   hermes-whisper-setup                 CPU only: small model (fast on CPU)
+#   hermes-whisper-setup --cuda          NVIDIA GPU: large-v3-turbo (best for Hindi/Hinglish),
+#                                        with the CPU + small model kept as a fallback
+#   hermes-whisper-setup --model NAME    override the main model (e.g. base-q5_1, medium-q5_0)
+#
+# Installs to ~/.local/share/hermes/whisper:
+#   whisper-cli + models/default.bin          what hermesd runs
+#   whisper-cli-cpu + models/fallback.bin     retried if the main one fails (--cuda only)
+# Benchmark (Ryzen 5600H / GTX 1650, 11 s clip): CPU small 5.5 s, CPU turbo 26 s, CUDA turbo 5.6 s.
+set -eu
+VERSION=v1.9.5
+CUDA=0
+MODEL=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --cuda) CUDA=1 ;;
+    --model) MODEL="$2"; shift ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+[ -n "$MODEL" ] || { [ "$CUDA" = 1 ] && MODEL=large-v3-turbo-q5_0 || MODEL=small-q5_1; }
+
+DEST="$HOME/.local/share/hermes/whisper"
+SRC="$HOME/.local/src/whisper.cpp"
+mkdir -p "$DEST/models" "$(dirname "$SRC")"
+
+if [ ! -d "$SRC/.git" ]; then
+    git clone --depth 1 --branch "$VERSION" https://github.com/ggml-org/whisper.cpp.git "$SRC"
+else
+    git -C "$SRC" fetch --depth 1 origin tag "$VERSION" && git -C "$SRC" checkout -q "$VERSION"
+fi
+
+build() { # build <dir> <cuda ON|OFF>
+    echo "→ building whisper.cpp $VERSION (CUDA=$2)"
+    cmake -S "$SRC" -B "$SRC/$1" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF \
+        -DWHISPER_BUILD_SERVER=OFF -DGGML_NATIVE=ON -DGGML_CUDA="$2" >/dev/null
+    cmake --build "$SRC/$1" -j"$(nproc)" --target whisper-cli >/dev/null
+}
+fetch() { # fetch <model>
+    f="$DEST/models/ggml-$1.bin"
+    if [ ! -s "$f" ]; then
+        echo "→ downloading model $1"
+        curl -fL --progress-bar -o "$f.part" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$1.bin"
+        mv "$f.part" "$f"
+    fi
+}
+
+build build OFF
+if [ "$CUDA" = 1 ]; then
+    command -v nvcc >/dev/null || { echo "nvcc not found; install the CUDA toolkit or drop --cuda" >&2; exit 1; }
+    build build-cuda ON
+    install -m 755 "$SRC/build-cuda/bin/whisper-cli" "$DEST/whisper-cli"
+    install -m 755 "$SRC/build/bin/whisper-cli" "$DEST/whisper-cli-cpu"
+    fetch small-q5_1
+    ln -sfn ggml-small-q5_1.bin "$DEST/models/fallback.bin"
+else
+    install -m 755 "$SRC/build/bin/whisper-cli" "$DEST/whisper-cli"
+    rm -f "$DEST/whisper-cli-cpu" "$DEST/models/fallback.bin"
+fi
+fetch "$MODEL"
+ln -sfn "ggml-$MODEL.bin" "$DEST/models/default.bin"
+echo "✓ whisper ready: $DEST (model $MODEL). Restart hermesd: systemctl --user restart hermesd"

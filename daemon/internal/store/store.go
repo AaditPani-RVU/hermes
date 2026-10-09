@@ -332,6 +332,9 @@ func Preview(m *Message) string {
 	case "gif":
 		return label("🎞", "GIF")
 	case "voice":
+		if text != "" {
+			return "🎤 " + text // transcript
+		}
 		return "🎤 Voice message"
 	case "audio":
 		return "🎵 Audio"
@@ -609,6 +612,18 @@ func (s *Store) DeleteMessage(ctx context.Context, chat, id string) error {
 
 func (s *Store) SetMediaPath(ctx context.Context, chat, id, path string) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE hermes_messages SET media_path=? WHERE chat=? AND id=?`, path, chat, id)
+	return err
+}
+
+// SetTranscript stores a voice note's transcript as its text (indexed for search) plus its state in extra.
+func (s *Store) SetTranscript(ctx context.Context, chat, id, text, extra string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE hermes_messages SET text=?, extra=? WHERE chat=? AND id=? AND revoked=0`, text, extra, chat, id)
+	return err
+}
+
+// SetRaw replaces a message's serialized proto (e.g. with a re-uploaded media path).
+func (s *Store) SetRaw(ctx context.Context, chat, id string, raw []byte) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE hermes_messages SET raw=? WHERE chat=? AND id=?`, raw, chat, id)
 	return err
 }
 

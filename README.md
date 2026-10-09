@@ -61,6 +61,13 @@ chips you click to add or remove your own.
 
 <img src="docs/convo.png" alt="A group conversation in Hermes, laid out as a transcript" width="100%">
 
+### Voice notes you can read
+
+Incoming voice notes are transcribed on your own machine with [whisper.cpp](https://github.com/ggml-org/whisper.cpp),
+in whatever language they're in. Nothing is uploaded anywhere. The transcript appears under the player, in the inbox
+preview, in notifications, and in search, so you can find "that voice note about the flat" weeks later.
+Older voice notes can be transcribed from the message menu.
+
 ### Snooze and remind me
 
 Pick a preset with a number key, or just start typing a time: `in 2h`, `tonight`, `tmr 14:00`, `fri 9am`, `18:30`.
@@ -86,8 +93,9 @@ and right-clicking a message gives **Remind me about this…**
 
 - **Messaging:** text with `*bold*` `_italic_` `~strike~` `` `code` `` formatting, replies, mentions, reactions,
   editing, delete for everyone or for you, forwarding, starring, polls (create, vote, live results).
-- **Media:** photos, video, GIFs, voice notes (record from your mic, waveform, 1×/1.5×/2× playback),
-  documents, stickers (including animated), locations and contact cards. Drag and drop files to send them.
+- **Media:** photos, video, GIFs, voice notes (record from your mic, waveform, 1×/1.5×/2× playback,
+  local transcription), documents, stickers (including animated), locations and contact cards. Drag and drop files to send them.
+  Media that WhatsApp has expired is re-requested from your phone, like the official apps do.
 - **Stays in sync with your phone:** archive, pin, mute and read state go both ways. History syncs when you link,
   and older history is fetched on demand. Delivery and read ticks, typing indicators, online status.
 - **Search:** full-text search across every chat, plus a starred-messages view.
@@ -158,7 +166,14 @@ hermes pair           # shows a QR code: WhatsApp on your phone → Linked devic
 hermes-ui             # opens the window (niri users get Mod+Ctrl+W)
 ```
 
-Optional: install `qt6-image-formats-plugins` for native animated WebP stickers.
+Optional extras:
+
+```sh
+hermes-whisper-setup --cuda   # voice-note transcription on an NVIDIA GPU (large-v3-turbo, ~5 s per note)
+hermes-whisper-setup          # or CPU only (small model, similar speed, less accurate for mixed languages)
+```
+
+and `qt6-image-formats-plugins` for native animated WebP stickers.
 
 Hermes picks up colours from Clavis Shell's matugen output if it's there, and falls back to a built-in dark
 theme otherwise.
@@ -192,7 +207,7 @@ hermes updates                    check WhatsApp / library update status
 - [x] Full messaging and media, sync with phone, search, scheduling, focus mode
 - [x] Triage inbox with done, snooze and remind-me
 - [x] Transcript-style conversation view, typed snooze times, message reminders
-- [ ] Voice-note transcription that runs locally (whisper.cpp)
+- [x] Voice-note transcription that runs locally (whisper.cpp)
 - [ ] Private per-chat notes, text snippets, replying from notifications
 - [ ] Status (stories), channels, group admin, privacy settings
 
