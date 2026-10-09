@@ -293,7 +293,7 @@ func (c *Core) handleMessage(ctx context.Context, evt *events.Message, live bool
 	if !live {
 		return
 	}
-	incUnread := inserted && !m.FromMe && !c.focused(chat) && chat != "status@broadcast"
+	incUnread := inserted && !m.FromMe && !c.focused(chat) && chat != "status@broadcast" && !IsChannel(chat)
 	if chat == statusChat {
 		if inserted {
 			c.Log.Infof("Status from %s (%s)", m.SenderName, m.Type)

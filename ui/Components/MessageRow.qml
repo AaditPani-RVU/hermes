@@ -216,6 +216,15 @@ Item {
                         status: root.status
                         size: 14
                     }
+                    // Channel posts: view count
+                    Text {
+                        visible: (root.extraObj.views || 0) > 0
+                        anchors.baseline: nameText.baseline
+                        text: "👁 " + (root.extraObj.views >= 1e6 ? (root.extraObj.views / 1e6).toFixed(1) + "M" : root.extraObj.views >= 1e3 ? (root.extraObj.views / 1e3).toFixed(1) + "K" : root.extraObj.views)
+                        color: Theme.fgSurfaceVariant
+                        font.family: Theme.font
+                        font.pixelSize: 11
+                    }
                 }
 
                 // Quoted reply: an indented excerpt with a rule
@@ -346,21 +355,29 @@ Item {
 
                 // Reactions: click one to add or remove yours
                 Flow {
-                    visible: root.reactionList.length > 0
+                    visible: chipRep.count > 0
                     Layout.fillWidth: true
                     Layout.topMargin: 2
                     spacing: 6
                     Repeater {
+                        id: chipRep
                         model: {
                             const out = [];
                             const idx = {};
+                            // Channel posts carry aggregate counts from WhatsApp.
+                            const counts = root.extraObj.reactionCounts || {};
+                            for (const emoji in counts) {
+                                idx[emoji] = out.length;
+                                out.push({ emoji: emoji, count: counts[emoji], mine: false, names: [] });
+                            }
                             for (const r of root.reactionList) {
                                 if (idx[r.emoji] === undefined) {
                                     idx[r.emoji] = out.length;
                                     out.push({ emoji: r.emoji, count: 0, mine: false, names: [] });
                                 }
                                 const e = out[idx[r.emoji]];
-                                e.count++;
+                                if (counts[r.emoji] === undefined)
+                                    e.count++; // server counts already include everyone
                                 e.names.push(r.fromMe || r.sender === Hermes.status.meJid ? "You" : (r.senderName || "").split(" ")[0]);
                                 if (r.fromMe || r.sender === Hermes.status.meJid)
                                     e.mine = true;
@@ -415,7 +432,7 @@ Item {
                     id: tools
                     anchors.centerIn: parent
                     IconButton { size: 30; iconSize: 18; icon: "add_reaction"; tip: "React"; onClicked: root.menuRequested(this, 0, height + 4) }
-                    IconButton { size: 30; iconSize: 18; icon: "reply"; tip: "Reply"; onClicked: root.replyRequested() }
+                    IconButton { visible: !root.chat.endsWith("@newsletter"); size: 30; iconSize: 18; icon: "reply"; tip: "Reply"; onClicked: root.replyRequested() }
                     IconButton { size: 30; iconSize: 18; icon: "alarm"; tip: "Remind me"; onClicked: root.remindRequested() }
                     IconButton { size: 30; iconSize: 18; icon: "more_horiz"; tip: "More"; onClicked: root.menuRequested(this, 0, height + 4) }
                 }

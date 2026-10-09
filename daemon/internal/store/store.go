@@ -363,7 +363,7 @@ func Preview(m *Message) string {
 
 func (s *Store) ListChats(ctx context.Context, archived bool) ([]*Chat, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT `+chatCols+` FROM hermes_chats
-		WHERE archived=? AND jid != 'status@broadcast' AND (last_ts > 0 OR draft != '')
+		WHERE archived=? AND jid != 'status@broadcast' AND jid NOT LIKE '%@newsletter' AND (last_ts > 0 OR draft != '')
 		ORDER BY pinned_ts DESC, last_ts DESC`, b2i(archived))
 	if err != nil {
 		return nil, err
@@ -467,7 +467,8 @@ func (s *Store) RecomputeLast(ctx context.Context, jid string) error {
 
 func (s *Store) TotalUnread(ctx context.Context) (chats int, msgs int, err error) {
 	err = s.DB.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(unread),0) FROM hermes_chats
-		WHERE (unread > 0 OR marked_unread=1) AND archived=0 AND muted_until <= ? AND jid != 'status@broadcast'`,
+		WHERE (unread > 0 OR marked_unread=1) AND archived=0 AND muted_until <= ? AND jid != 'status@broadcast'
+		AND jid NOT LIKE '%@newsletter'`,
 		time.Now().Unix()).Scan(&chats, &msgs)
 	return
 }
@@ -622,6 +623,12 @@ func (s *Store) SetMediaPath(ctx context.Context, chat, id, path string) error {
 // SetTranscript stores a voice note's transcript as its text (indexed for search) plus its state in extra.
 func (s *Store) SetTranscript(ctx context.Context, chat, id, text, extra string) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE hermes_messages SET text=?, extra=? WHERE chat=? AND id=? AND revoked=0`, text, extra, chat, id)
+	return err
+}
+
+// SetExtra replaces a message's extra JSON (e.g. refreshed channel view/reaction counts).
+func (s *Store) SetExtra(ctx context.Context, chat, id, extra string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE hermes_messages SET extra=? WHERE chat=? AND id=?`, extra, chat, id)
 	return err
 }
 

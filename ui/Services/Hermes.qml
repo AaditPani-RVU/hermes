@@ -39,6 +39,8 @@ Singleton {
     signal incomingCall(string name, bool video)
     signal messagesLoaded
     signal manageSnippetsRequested
+    property var channels: []
+    readonly property bool currentIsChannel: currentChat.endsWith("@newsletter")
     property var statusFeed: ({ mine: null, authors: [], receipts: true })
     readonly property int statusUnseen: statusFeed.authors.filter(a => a.unseen > 0).length
     signal quickReplyRequested(string jid)
@@ -387,8 +389,12 @@ Singleton {
             currentInfo = chats.get(idx);
             return;
         }
+        // Channels aren't in the chat list; use what the channel list knows meanwhile.
+        const ch = channels.find(c => c.jid === currentChat);
+        if (ch)
+            currentInfo = chatFields({ jid: ch.jid, name: ch.name, avatarPath: ch.avatarPath, lastTs: ch.lastTs });
         call("chats.get", { chat: currentChat }, res => {
-            if (res && res.jid === currentChat)
+            if (res && res.jid === currentChat && (res.name || !currentInfo))
                 currentInfo = chatFields(res);
         });
     }
@@ -559,7 +565,10 @@ Singleton {
         act("messages.sendFile", { chat: currentChat, path: path, caption: caption || "", kind: kind || "auto", replyTo: replyTo || "" });
     }
     function react(id, emoji) {
-        act("messages.react", { chat: currentChat, id: id, emoji: emoji });
+        if (currentIsChannel)
+            act("channels.react", { chat: currentChat, id: id, emoji: emoji });
+        else
+            act("messages.react", { chat: currentChat, id: id, emoji: emoji });
     }
     function download(id, cb) {
         call("messages.download", { chat: currentChat, id: id }, (res, err) => {
@@ -573,6 +582,26 @@ Singleton {
         if (currentChat)
             call("presence.typing", { chat: currentChat, composing: composing });
     }
+    function refreshChannels() {
+        call("channels.list", {}, res => {
+            if (!res)
+                return;
+            root.channels = res;
+            if (currentIsChannel && !(currentInfo && currentInfo.name))
+                updateCurrentInfo();
+        });
+    }
+    // Open a channel: show what's stored right away, then pull the newest posts (and count our view).
+    function openChannel(jid) {
+        openChat(jid);
+        call("channels.fetch", { chat: jid, view: true }, (n, err) => {
+            if (err)
+                root.toast(err, true);
+            else if (currentChat === jid)
+                loadMessages(jid);
+        });
+    }
+
     function refreshStatus() {
         call("status.list", {}, res => {
             if (res)

@@ -65,6 +65,10 @@ ShellRoot {
                     anchors.fill: parent
                     visible: rail.section === "settings"
                 }
+                ChannelsPane {
+                    anchors.fill: parent
+                    visible: rail.section === "channels"
+                }
                 StatusPane {
                     anchors.fill: parent
                     visible: rail.section === "status"

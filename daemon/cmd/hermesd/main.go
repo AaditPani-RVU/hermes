@@ -456,6 +456,41 @@ func registerMethods(srv *rpc.Server, core *wa.Core, st *hs.Store, openUI func(s
 		}
 		return nil, core.SetBlocked(ctx, p.Chat, p.Block)
 	})
+	// Channels
+	h("channels.list", func(ctx context.Context, _ json.RawMessage) (any, error) { return core.ListChannels(ctx) })
+	h("channels.fetch", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat   string
+			Before int
+			View   bool
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.FetchChannelPosts(ctx, p.Chat, p.Before, p.View)
+	})
+	h("channels.react", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Chat, ID, Emoji string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.ReactToChannelPost(ctx, p.Chat, p.ID, p.Emoji)
+	})
+	h("channels.follow", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Link string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.FollowChannel(ctx, p.Link)
+	})
+	h("channels.unfollow", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[chatParam](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.UnfollowChannel(ctx, p.Chat)
+	})
+
 	// Account settings
 	h("settings.get", func(ctx context.Context, _ json.RawMessage) (any, error) { return core.GetSettings(ctx) })
 	h("settings.setPrivacy", func(ctx context.Context, raw json.RawMessage) (any, error) {

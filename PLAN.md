@@ -359,6 +359,17 @@ the home view groups chats by what they need from you, and chats are cleared, no
 - `SettingsPane` (gear in the rail, or Ctrl+K): profile, privacy choices, read receipts toggle, blocked list with Unblock,
   Hermes options (transcription, private status viewing, snippets, compatibility). Live read of settings works.
 
+### 2026-10-09: Phase C (4) channels
+- `wa/channels.go`: `channels.list` (GetSubscribedNewsletters; picture cached from URL or `mmg.whatsapp.net`+DirectPath),
+  `channels.fetch` (40 posts via GetNewsletterMessages, converted and stored as messages in the channel chat with
+  `extra.serverId/views/reactionCounts`; `view:true` marks them viewed), `channels.react` (needs serverId),
+  `channels.follow` (invite link), `channels.unfollow`. Channels excluded from ListChats, TotalUnread and notifications.
+- UI: Channels rail tab and `ChannelsPane` (follow-by-link field, list, right-click unfollow); opening a channel reuses
+  the conversation view in read-only mode (no composer, no Done/Snooze/call/info), with 👁 view counts and aggregate
+  reaction chips. Live: 2 followed channels listed with pictures; fetch stored 39 posts.
+
+**Phase C is complete.** Remaining ideas: media-retry verification, OCR/summaries, Obsidian export, auto-filing media.
+
 **Not done yet / next:**
 - [x] First real pairing (2026-10-09): QR link works
 - [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)

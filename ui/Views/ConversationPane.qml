@@ -74,6 +74,10 @@ Rectangle {
                         const verb = t.recording ? "recording audio…" : "typing…";
                         return pane.isGroup ? names.join(", ") + (names.length > 1 ? " are " : " is ") + verb : verb;
                     }
+                    if (Hermes.currentIsChannel) {
+                        const ch = Hermes.channels.find(c => c.jid === Hermes.currentChat);
+                        return "Channel" + (ch ? " · " + (ch.subscribers >= 1000 ? Math.round(ch.subscribers / 100) / 10 + "K" : ch.subscribers) + " followers" : "");
+                    }
                     if (pane.isGroup)
                         return "Click for group info";
                     const s = F.lastSeen(Hermes.presence[Hermes.currentChat]);
@@ -154,11 +158,13 @@ Rectangle {
                 }
             }
             IconButton {
+                visible: !Hermes.currentIsChannel
                 icon: "snooze"
                 tip: "Snooze (Ctrl+S)"
                 onClicked: pane.snoozeRequested("")
             }
             TextButton {
+                visible: !Hermes.currentIsChannel
                 anchors.verticalCenter: parent.verticalCenter
                 readonly property bool isDone: !!pane.info && (pane.info.bucket === "done" || pane.info.bucket === "waiting")
                 text: isDone ? "Cleared" : "Done"
@@ -168,6 +174,7 @@ Rectangle {
             }
             Item { width: 6; height: 1 }
             IconButton {
+                visible: !Hermes.currentIsChannel
                 icon: "videocam"
                 tip: "Calls aren't supported on desktop yet — use your phone"
                 onClicked: Hermes.toast("Calls aren't supported by the open WhatsApp protocol yet. Use your phone for calls.", false)
@@ -178,6 +185,7 @@ Rectangle {
                 onClicked: pane.searchInChat()
             }
             IconButton {
+                visible: !Hermes.currentIsChannel
                 icon: "info"
                 tip: "Chat info"
                 toggled: pane.infoOpen
@@ -434,11 +442,36 @@ Rectangle {
         }
     }
 
+    Rectangle {
+        visible: Hermes.currentIsChannel
+        anchors.left: parent.left
+        anchors.right: infoPanel.left
+        anchors.bottom: parent.bottom
+        height: visible ? 44 : 0
+        z: 1
+        color: Theme.surfaceContainer
+        Row {
+            anchors.centerIn: parent
+            spacing: 8
+            Icon { name: "campaign"; size: 18; anchors.verticalCenter: parent.verticalCenter }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Channel · only admins post. Hover a post to react."
+                color: Theme.fgSurfaceVariant
+                font.family: Theme.font
+                font.pixelSize: 13
+            }
+        }
+    }
+
     Composer {
         id: composer
         anchors.left: parent.left
         anchors.right: infoPanel.left
         anchors.bottom: parent.bottom
+        // Channels are read-only: react to posts instead.
+        visible: !Hermes.currentIsChannel
+        height: visible ? implicitHeight : 0
         onPollRequested: pollSheet.open()
         onScheduleRequested: text => {
             scheduleSheet.text = text;
