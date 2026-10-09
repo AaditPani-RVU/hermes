@@ -688,7 +688,7 @@ func (s *Store) Search(ctx context.Context, query, chat string, limit int) ([]*S
 		return nil, err
 	}
 	// Text inside images: shown with a 🔍 so it's clear the words are in the picture.
-	ocr, err := s.searchFTS(ctx, `SELECT `+msgColsM+`, COALESCE(c.name, ''), '🔍 ' || snippet(hermes_ocr_fts, 0, '«', '»', '…', 12)
+	ocr, err := s.searchFTS(ctx, `SELECT `+msgColsM+`, COALESCE(c.name, ''), '🔍 ' || replace(snippet(hermes_ocr_fts, 0, '«', '»', '…', 12), char(10), ' · ')
 		FROM hermes_ocr_fts f JOIN hermes_ocr o ON o.rowid = f.rowid
 		JOIN hermes_messages m ON m.chat = o.chat AND m.id = o.id
 		LEFT JOIN hermes_chats c ON c.jid = m.chat
