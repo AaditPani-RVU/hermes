@@ -8,25 +8,64 @@ import qs.Components
 import qs.Services
 import qs.Widgets.common
 
-// Recent chats with inline quick reply, anchored to the bar pill.
-PopupWindow {
+// Recent chats with inline quick reply, shown under the bar pill.
+//
+// This is a full-screen transparent layer-shell surface rather than an xdg popup of the
+// bar: the bar never takes keyboard focus, so a popup parented to it can't receive typing
+// either. Owning a layer with exclusive keyboard focus while open makes quick reply work,
+// and clicking outside the card (or Esc) closes it.
+PanelWindow {
     id: root
 
     property Item anchorItem: null
-    property var screen: null
     property string edge: "top"
     property string replyJid: ""
-    readonly property real padding: 10
+    readonly property real gap: 8
 
     function open() {
         HermesBarService.reloadChats();
         root.replyJid = "";
+        root.place();
         root.visible = true;
         keyScope.forceActiveFocus();
     }
 
     function close() {
         root.visible = false;
+    }
+
+    // Put the card next to the pill. The bar spans its whole edge, so the pill's
+    // position inside the bar window plus the bar's offset on screen is its screen position.
+    property real cardX: 0
+    property real cardY: 0
+    function place() {
+        if (!root.anchorItem)
+            return;
+        const barWin = root.anchorItem.QsWindow.window;
+        const p = root.anchorItem.mapToItem(null, 0, 0);
+        const aw = root.anchorItem.width, ah = root.anchorItem.height;
+        const offX = root.edge === "right" && barWin ? root.width - barWin.width : 0;
+        const offY = root.edge === "bottom" && barWin ? root.height - barWin.height : 0;
+        const cw = card.width, ch = card.implicitHeight;
+        const clampX = x => Math.max(root.gap, Math.min(root.width - cw - root.gap, x));
+        const clampY = y => Math.max(root.gap, Math.min(root.height - ch - root.gap, y));
+        switch (root.edge) {
+        case "bottom":
+            root.cardX = clampX(p.x + aw / 2 - cw / 2);
+            root.cardY = offY + p.y - ch - root.gap;
+            break;
+        case "left":
+            root.cardX = p.x + aw + root.gap;
+            root.cardY = clampY(p.y);
+            break;
+        case "right":
+            root.cardX = offX + p.x - cw - root.gap;
+            root.cardY = clampY(p.y);
+            break;
+        default:
+            root.cardX = clampX(p.x + aw / 2 - cw / 2);
+            root.cardY = p.y + ah + root.gap;
+        }
     }
 
     function timeLabel(ts) {
@@ -46,44 +85,24 @@ PopupWindow {
 
     visible: false
     color: "transparent"
-    grabFocus: true
-    implicitWidth: card.implicitWidth + root.padding * 2
-    implicitHeight: card.implicitHeight + root.padding * 2
+    exclusiveZone: 0
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.namespace: "clavis-shell-hermes"
+    WlrLayershell.exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.keyboardFocus: root.visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
-    anchor {
-        item: root.anchorItem
-        rect.width: Math.max(1, root.anchorItem ? root.anchorItem.width : 1)
-        rect.height: Math.max(1, root.anchorItem ? root.anchorItem.height : 1)
-        edges: root.edge === "left" ? Edges.Right : root.edge === "right" ? Edges.Left : root.edge === "bottom"
-                                                                                       ? Edges.Top : Edges.Bottom
-        gravity: root.edge === "left" ? Edges.Right : root.edge === "right" ? Edges.Left : root.edge
-                                                                              === "bottom" ? Edges.Top : Edges.Bottom
-        adjustment: root.edge === "left" || root.edge === "right" ? PopupAdjustment.SlideY :
-                                                                    PopupAdjustment.SlideX
+    anchors {
+        top: true
+        bottom: true
+        left: true
+        right: true
     }
 
-    PanelWindow {
-        // Click anywhere outside to close (niri doesn't dismiss grabbing popups by itself).
-        visible: root.visible && ThemeService.isNiriSession
-        screen: root.screen
-        color: "transparent"
-        exclusiveZone: 0
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.namespace: "clavis-shell-hermes-backdrop"
-        WlrLayershell.exclusionMode: ExclusionMode.Ignore
-
-        anchors {
-            top: true
-            bottom: true
-            left: true
-            right: true
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.AllButtons
-            onClicked: root.close()
-        }
+    // Click anywhere outside the card to close.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+        onClicked: root.close()
     }
 
     FocusScope {
@@ -106,8 +125,9 @@ PopupWindow {
         Rectangle {
             id: card
 
-            x: root.padding
-            y: root.padding
+            x: root.cardX
+            y: root.cardY
+            width: implicitWidth
             implicitWidth: 360
             implicitHeight: column.implicitHeight + 16
             color: BlurService.backgroundColor(Appearance.colors.colLayer0)
@@ -115,6 +135,12 @@ PopupWindow {
             border.width: 1
             border.color: Appearance.colors.colLayer0Border
             clip: true
+
+            // Swallow clicks on the card's empty space so they don't close it.
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.AllButtons
+            }
 
             Behavior on implicitHeight {
                 NumberAnimation {
