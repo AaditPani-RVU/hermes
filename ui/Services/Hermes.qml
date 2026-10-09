@@ -39,6 +39,8 @@ Singleton {
     signal incomingCall(string name, bool video)
     signal messagesLoaded
     signal manageSnippetsRequested
+    signal quickReplyRequested(string jid)
+    signal messageEvent(var m) // every incoming/updated message, any chat
     property var snippets: [] // [{trigger, text}]
     property string jumpTo: "" // message to scroll to once the open chat loads (reminders)
 
@@ -646,6 +648,7 @@ Singleton {
             unreadMessages = data.messages;
             break;
         case "message":
+            messageEvent(data);
             upsertMessage(data);
             if (data.chat === currentChat && !data.fromMe && typing[data.chat]) {
                 const t = Object.assign({}, typing);
@@ -702,6 +705,9 @@ Singleton {
             break;
         case "ui.open":
             openChatRequested(data.chat || "");
+            break;
+        case "ui.quickReply":
+            quickReplyRequested(data.chat || "");
             break;
         case "call":
             incomingCall(data.name, data.video);

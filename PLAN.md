@@ -317,6 +317,16 @@ the home view groups chats by what they need from you, and chats are cleared, no
   `;name␣` expands an exact match). Placeholders `{first}` `{name}` `{date}` `{time}`; in groups `{first}` drops out with its space.
   `SnippetsSheet` from Ctrl+K or the picker. CLI `hermes snippets`, `hermes snippet <name> [text]`.
 
+### 2026-10-09: Phase B (3) reply from notifications
+- Notifications carry a third action. If the server advertises `inline-reply` (KDE, swaync, dunst) it's the standard
+  inline-reply action and `NotificationReplied(id, text)` sends straight away; otherwise it's a "Reply" button.
+  Clavis advertises no inline-reply, and adding a text field to its Keystone island would mean reworking its layer-shell
+  focus logic in a third-party shell, so instead "Reply" opens Hermes' own `QuickReply` window: a floating toplevel
+  (niri rule on title "Reply · …") with the last 6 messages and a composer; Enter sends + marks read, Esc closes.
+- Daemon: `notify.OnQuickReply` → `ui.quickReply` event, or launches `hermes-ui` with `HERMES_QUICK_REPLY=<jid>`
+  (main window starts hidden). IPC: `qs -p ~/.local/share/hermes/ui ipc call hermes reply <jid>`.
+- No Clavis changes needed.
+
 **Not done yet / next:**
 - [x] First real pairing (2026-10-09): QR link works
 - [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)

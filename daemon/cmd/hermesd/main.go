@@ -92,6 +92,21 @@ func run(log waLog.Logger, dataDir, cacheDir, sock string) error {
 		go func() { _ = cmd.Wait() }()
 	}
 
+	// Quick reply: a small Hermes window with the last few messages and a text box.
+	quickReply := func(chat string) {
+		if srv.UIConnected() {
+			srv.Broadcast("ui.quickReply", map[string]string{"chat": chat})
+			return
+		}
+		cmd := exec.Command("hermes-ui")
+		cmd.Env = append(os.Environ(), "HERMES_QUICK_REPLY="+chat)
+		if err := cmd.Start(); err != nil {
+			log.Warnf("launch hermes-ui: %v", err)
+			return
+		}
+		go func() { _ = cmd.Wait() }()
+	}
+
 	if n, err := notify.New(); err != nil {
 		log.Warnf("Desktop notifications unavailable: %v", err)
 	} else {
@@ -105,6 +120,15 @@ func run(log waLog.Logger, dataDir, cacheDir, sock string) error {
 			filepath.Join(home, ".local/share/icons/hicolor/scalable/apps/hermes.svg"),
 		}
 		n.OnMarkRead = func(chat string) { _ = core.MarkRead(context.Background(), chat) }
+		n.OnQuickReply = quickReply
+		n.OnReply = func(chat, text string) {
+			bg := context.Background()
+			if _, err := core.SendText(bg, chat, text, wa.SendOpts{}); err != nil {
+				n.NotifySystem("Reply not sent", err.Error())
+				return
+			}
+			_ = core.MarkRead(bg, chat)
+		}
 		n.Quiet = func(chat string) bool { return focusBlocks(ctx, st, chat) }
 		core.Notify = n
 	}

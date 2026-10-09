@@ -24,6 +24,12 @@ type Notifier struct {
 
 	OnOpen     func(chat string)
 	OnMarkRead func(chat string)
+	// OnQuickReply opens Hermes' quick-reply window (the "Reply" button).
+	OnQuickReply func(chat string)
+	// OnReply sends text typed into the notification itself, on servers with inline replies.
+	OnReply func(chat, text string)
+	// inlineReply is set when the notification server can show a reply field (KDE, swaync, dunst…).
+	inlineReply bool
 	// Quiet returns true when notifications should be suppressed (focus mode).
 	Quiet func(chat string) bool
 	// Icons are image files tried in order for the app icon; the first that
@@ -47,6 +53,14 @@ func New() (*Notifier, error) {
 	}
 	if err := conn.AddMatchSignal(dbus.WithMatchInterface(busName), dbus.WithMatchObjectPath(objPath)); err != nil {
 		return nil, err
+	}
+	var caps []string
+	if err := n.obj.Call(busName+".GetCapabilities", 0).Store(&caps); err == nil {
+		for _, c := range caps {
+			if c == "inline-reply" {
+				n.inlineReply = true
+			}
+		}
 	}
 	sigs := make(chan *dbus.Signal, 16)
 	conn.Signal(sigs)
@@ -78,6 +92,22 @@ func (n *Notifier) listen(sigs chan *dbus.Signal) {
 				if n.OnMarkRead != nil {
 					go n.OnMarkRead(chat)
 				}
+			case "reply":
+				if n.OnQuickReply != nil {
+					go n.OnQuickReply(chat)
+				}
+			}
+		case busName + ".NotificationReplied":
+			if len(sig.Body) < 2 {
+				continue
+			}
+			id, _ := sig.Body[0].(uint32)
+			text, _ := sig.Body[1].(string)
+			n.mu.Lock()
+			chat, ok := n.chatFor[id]
+			n.mu.Unlock()
+			if ok && strings.TrimSpace(text) != "" && n.OnReply != nil {
+				go n.OnReply(chat, text)
 			}
 		case busName + ".NotificationClosed":
 			if len(sig.Body) < 1 {
@@ -148,7 +178,13 @@ func (n *Notifier) NotifyMessage(chat *hs.Chat, m *hs.Message) {
 	if chat.AvatarPath != "" {
 		hints["image-path"] = dbus.MakeVariant(chat.AvatarPath)
 	}
-	id := n.send(replaces, icon, summary, strings.Join(lines, "\n"), []string{"default", "Open", "read", "Mark as read"}, hints)
+	// Servers with inline replies get a text field; everyone else gets a button that opens Hermes' quick reply.
+	reply := "reply"
+	if n.inlineReply {
+		reply = "inline-reply"
+	}
+	id := n.send(replaces, icon, summary, strings.Join(lines, "\n"),
+		[]string{"default", "Open", reply, "Reply", "read", "Mark as read"}, hints)
 	if id == 0 {
 		return
 	}

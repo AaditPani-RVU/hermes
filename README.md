@@ -79,6 +79,13 @@ Nothing is sent until you press Enter.
 
 <img src="docs/notes-snippets.png" alt="A private note under the chat header and the snippet picker above the message box" width="100%">
 
+### Reply without opening the app
+
+Every message notification has a **Reply** button. It opens a small floating window with the last few messages and a
+text box: type, press Enter, and it's sent and the chat is marked read. The main window stays out of the way.
+
+<img src="docs/quick-reply.png" alt="The quick-reply window" width="420">
+
 ### Snooze and remind me
 
 Pick a preset with a number key, or just start typing a time: `in 2h`, `tonight`, `tmr 14:00`, `fri 9am`, `18:30`.
@@ -112,7 +119,8 @@ and right-clicking a message gives **Remind me about this…**
 - **Search:** full-text search across every chat, plus a starred-messages view.
 - **Later:** schedule a message for a specific time; the daemon sends it even if the window is closed.
 - **Focus mode:** silence notifications from everyone except a VIP list.
-- **Desktop:** notifications grouped per chat with *Open* and *Mark read* buttons, a status-bar widget that
+- **Desktop:** notifications grouped per chat with *Open*, *Reply* and *Mark read* buttons. *Reply* opens a small
+  floating quick-reply window (on desktops with inline replies, like KDE or swaync, you type straight into the notification), a status-bar widget that
   counts the chats that need you (with quick reply, and middle-click to mark done), a niri keybind, and Material 3 colours that follow your wallpaper.
 - **Terminal:** a `hermes` CLI for scripts and status bars (see below).
 
@@ -222,7 +230,7 @@ hermes updates                    check WhatsApp / library update status
 - [x] Transcript-style conversation view, typed snooze times, message reminders
 - [x] Voice-note transcription that runs locally (whisper.cpp)
 - [x] Private per-chat notes and text snippets
-- [ ] Replying straight from notifications
+- [x] Replying straight from notifications
 - [ ] Status (stories), channels, group admin, privacy settings
 
 ## Credits

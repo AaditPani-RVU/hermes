@@ -19,7 +19,8 @@ ShellRoot {
         implicitWidth: 1180
         implicitHeight: 780
         minimumSize: Qt.size(720, 480)
-        visible: true
+        // Launched just to answer a notification: show only the quick-reply window.
+        visible: !Quickshell.env("HERMES_QUICK_REPLY")
 
         Binding {
             target: Hermes
@@ -387,6 +388,10 @@ ShellRoot {
         }
     }
 
+    QuickReply {
+        id: quickReply
+    }
+
     ListModel {
         id: toastModel
     }
@@ -412,6 +417,10 @@ ShellRoot {
                 Hermes.openChat(jid);
             win.visible = true;
         }
+        function onQuickReplyRequested(jid) {
+            if (jid)
+                quickReply.openFor(jid);
+        }
         function onManageSnippetsRequested() {
             snippetsSheet.open();
         }
@@ -424,6 +433,9 @@ ShellRoot {
     }
 
     Component.onCompleted: {
+        const qr = Quickshell.env("HERMES_QUICK_REPLY");
+        if (qr)
+            Qt.callLater(() => quickReply.openFor(qr));
         const open = Quickshell.env("HERMES_OPEN_CHAT");
         if (open)
             Qt.callLater(() => Hermes.openChat(open));
@@ -438,6 +450,10 @@ ShellRoot {
         }
         function toggle(): void {
             win.visible = !win.visible;
+        }
+        function reply(jid: string): void {
+            if (jid)
+                quickReply.openFor(jid);
         }
         function commandPalette(): void {
             win.visible = true;
