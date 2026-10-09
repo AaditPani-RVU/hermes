@@ -415,6 +415,24 @@ Rectangle {
                 }
             }
 
+            SettingRow {
+                visible: !!panel.info
+                icon: "description"
+                label: "Export to Markdown"
+                value: Hermes.dataInfo.exportDir ? Hermes.dataInfo.exportDir.replace(Quickshell.env("HOME"), "~") : ""
+                onClicked: Hermes.exportChat(panel.info.jid, panel.info.name)
+            }
+            SettingRow {
+                visible: !!panel.info
+                icon: "drive_file_move"
+                label: "Auto-file media"
+                value: {
+                    const n = panel.info ? Hermes.rulesFor(panel.info.jid).length : 0;
+                    return n === 0 ? "Off" : n === 1 ? "1 rule" : n + " rules";
+                }
+                onClicked: Hermes.autoFileRequested(panel.info.jid, panel.info.name)
+            }
+
             Rectangle { width: parent.width - 32; height: 1; anchors.horizontalCenter: parent.horizontalCenter; color: Theme.alpha(Theme.outlineVariant, 0.5) }
 
             SettingRow {

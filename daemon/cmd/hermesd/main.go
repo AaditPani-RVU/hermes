@@ -786,6 +786,70 @@ func registerMethods(srv *rpc.Server, core *wa.Core, st *hs.Store, openUI func(s
 		srv.Broadcast("focus", map[string]any{"until": p.Until})
 		return nil, nil
 	})
+	// Your data: export, auto-filing, backups, storage
+	h("data.get", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return map[string]any{
+			"exportDir": core.ExportDir(ctx),
+			"rules":     core.FileRules(ctx),
+			"backup":    core.BackupInfo(ctx),
+		}, nil
+	})
+	h("data.setDirs", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ ExportDir, BackupDir *string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		if p.ExportDir != nil {
+			_ = st.SetKV(ctx, "export_dir", strings.TrimSpace(*p.ExportDir))
+		}
+		if p.BackupDir != nil {
+			_ = st.SetKV(ctx, "backup_dir", strings.TrimSpace(*p.BackupDir))
+		}
+		return nil, nil
+	})
+	h("export.chat", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat string
+			wa.ExportOpts
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.ExportChat(ctx, p.Chat, p.ExportOpts)
+	})
+	h("autofile.set", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Rules []wa.FileRule }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetFileRules(ctx, p.Rules)
+	})
+	h("messages.saveTo", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Chat, ID, Dir string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.FileMessage(ctx, p.Chat, p.ID, p.Dir)
+	})
+	h("backup.create", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Passphrase string
+			Media      bool
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		// Not tied to the caller: closing the window shouldn't abort a half-written backup.
+		return core.Backup(context.WithoutCancel(ctx), p.Passphrase, p.Media)
+	})
+	h("storage.stats", func(ctx context.Context, _ json.RawMessage) (any, error) { return core.Stats(ctx) })
+	h("storage.clean", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[wa.CleanOpts](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.CleanMedia(ctx, p)
+	})
 	h("updates.check", func(ctx context.Context, _ json.RawMessage) (any, error) { return core.CheckUpdates(ctx) })
 	h("ping", func(ctx context.Context, _ json.RawMessage) (any, error) { return "pong", nil })
 

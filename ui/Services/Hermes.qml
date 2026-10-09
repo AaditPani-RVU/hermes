@@ -39,6 +39,10 @@ Singleton {
     signal incomingCall(string name, bool video)
     signal messagesLoaded
     signal manageSnippetsRequested
+    signal autoFileRequested(string jid, string name) // jid "" = rule for any chat
+    signal backupRequested
+    signal storageRequested
+    property var dataInfo: ({ exportDir: "", rules: [], backup: { dir: "", last: 0, list: [] } })
     property var channels: []
     readonly property bool currentIsChannel: currentChat.endsWith("@newsletter")
     property var statusFeed: ({ mine: null, authors: [], receipts: true })
@@ -80,6 +84,34 @@ Singleton {
             _pending[id] = cb;
         sock.write(JSON.stringify({ id: id, method: method, params: params || {} }) + "\n");
         sock.flush();
+    }
+
+    // ---- your data ----
+
+    function refreshData(cb) {
+        call("data.get", {}, (res, err) => {
+            if (res) {
+                if (!res.backup.list) res.backup.list = [];
+                root.dataInfo = res;
+            }
+            if (cb) cb(res, err);
+        });
+    }
+
+    function exportChat(jid, name) {
+        toast("Exporting " + (name || "chat") + "…", false);
+        call("export.chat", { chat: jid }, (res, err) => {
+            if (err) {
+                toast("Export failed: " + err, true);
+                return;
+            }
+            const missing = res.missing > 0 ? " (" + res.missing + " attachments not downloaded)" : "";
+            toast("Exported " + res.messages + " messages to " + res.path.replace(Quickshell.env("HOME"), "~") + missing, false);
+        });
+    }
+
+    function rulesFor(jid) {
+        return (dataInfo.rules || []).filter(r => r.chat === jid);
     }
 
     // Like call(), but surfaces errors as a toast.
@@ -156,6 +188,7 @@ Singleton {
         reloadChats();
         refreshScheduled();
         refreshSnippets();
+        refreshData();
         refreshStatus();
         if (currentChat)
             loadMessages(currentChat);

@@ -312,18 +312,24 @@ func (c *Core) handleMessage(ctx context.Context, evt *events.Message, live bool
 	c.Emit("message", m)
 	c.emitChat(ctx, chat)
 
-	if inserted && !m.FromMe && m.MediaSize <= autoDownloadMax {
+	if inserted && !m.FromMe {
+		auto := false
 		switch m.Type {
 		case "image", "sticker", "voice", "audio", "gif":
-			if !m.ViewOnce {
-				go func() {
-					if _, err := c.DownloadMedia(context.Background(), chat, m.ID); err != nil {
-						c.Log.Warnf("auto-download %s: %v", m.ID, err)
-						return
-					}
-					c.autoTranscribe(context.Background(), m)
-				}()
-			}
+			auto = !m.ViewOnce && m.MediaSize <= autoDownloadMax
+		}
+		if auto {
+			go func() {
+				bg := context.Background()
+				if _, err := c.DownloadMedia(bg, chat, m.ID); err != nil {
+					c.Log.Warnf("auto-download %s: %v", m.ID, err)
+					return
+				}
+				c.autoFile(bg, m)
+				c.autoTranscribe(bg, m)
+			}()
+		} else {
+			c.autoFile(ctx, m)
 		}
 	}
 	if incUnread && c.Notify != nil {

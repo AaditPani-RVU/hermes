@@ -710,7 +710,11 @@ Item {
                     font.weight: Font.Medium
                 }
                 Text {
-                    text: [root.extraObj.pages ? root.extraObj.pages + " pages" : "", (root.fileName.split(".").pop() || "").toUpperCase(), F.size(root.mediaSize)].filter(x => x).join(" · ")
+                    width: parent.width
+                    elide: Text.ElideRight
+                    // "filed" = where an auto-file rule / Save to folder copied it
+                    text: [root.extraObj.pages ? root.extraObj.pages + " pages" : "", (root.fileName.split(".").pop() || "").toUpperCase(), F.size(root.mediaSize),
+                           root.extraObj.filed ? "in " + root.extraObj.filed.split("/").slice(-2, -1)[0] : ""].filter(x => x).join(" · ")
                     color: root.subColor
                     font.family: Theme.font
                     font.pixelSize: 12

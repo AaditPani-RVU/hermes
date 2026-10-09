@@ -403,6 +403,13 @@ ShellRoot {
                 case "scheduled": rail.section = "scheduled"; break;
                 case "starred": rail.section = "starred"; break;
                 case "markall": Hermes.act("chats.markAllRead", {}, "All chats marked as read"); break;
+                case "export":
+                    if (Hermes.currentChat) Hermes.exportChat(Hermes.currentChat, Hermes.currentInfo ? Hermes.currentInfo.name : "");
+                    else Hermes.toast("Open a chat first", false);
+                    break;
+                case "autofile": autoFileSheet.openFor("", ""); break;
+                case "backup": backupSheet.open(); break;
+                case "storage": storageSheet.open(); break;
                 }
             }
         }
@@ -411,6 +418,15 @@ ShellRoot {
         }
         SnippetsSheet {
             id: snippetsSheet
+        }
+        AutoFileSheet {
+            id: autoFileSheet
+        }
+        BackupSheet {
+            id: backupSheet
+        }
+        StorageSheet {
+            id: storageSheet
         }
         StatusComposer {
             id: statusComposer
@@ -456,6 +472,15 @@ ShellRoot {
         }
         function onManageSnippetsRequested() {
             snippetsSheet.open();
+        }
+        function onAutoFileRequested(jid, name) {
+            autoFileSheet.openFor(jid, name);
+        }
+        function onBackupRequested() {
+            backupSheet.open();
+        }
+        function onStorageRequested() {
+            storageSheet.open();
         }
         function onIncomingCall(name, video) {
             callBanner.who = name;

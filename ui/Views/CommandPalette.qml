@@ -29,7 +29,11 @@ Popup {
         { kind: "action", key: "archived", name: "Show archived chats", icon: "archive" },
         { kind: "action", key: "scheduled", name: "Scheduled messages", icon: "schedule_send" },
         { kind: "action", key: "starred", name: "Starred messages", icon: "star" },
-        { kind: "action", key: "markall", name: "Mark all chats as read", icon: "done_all" }
+        { kind: "action", key: "markall", name: "Mark all chats as read", icon: "done_all" },
+        { kind: "action", key: "export", name: "Export this chat to Markdown", icon: "description" },
+        { kind: "action", key: "autofile", name: "Auto-file media rules", icon: "drive_file_move" },
+        { kind: "action", key: "backup", name: "Back up Hermes", icon: "backup" },
+        { kind: "action", key: "storage", name: "Storage & cleanup", icon: "hard_drive" }
     ]
 
     function score(name, q) {

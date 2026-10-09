@@ -1,8 +1,11 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
+import Quickshell
 import qs.Services
 import qs.Components
+import "../Services/Format.js" as F
 
 // Account and app settings: profile, WhatsApp privacy, blocked contacts, Hermes options.
 Rectangle {
@@ -13,6 +16,9 @@ Rectangle {
     property var blocked: []
     property var hermes: ({ transcribeInstalled: false, transcribe: true })
     property bool loading: false
+    property var storage: null
+    readonly property string home: Quickshell.env("HOME")
+    function tilde(p) { return p && p.startsWith(home) ? "~" + p.slice(home.length) : (p || ""); }
 
     function reload() {
         loading = true;
@@ -22,6 +28,8 @@ Rectangle {
             else pane.settings = res;
         });
         Hermes.call("blocklist.get", {}, res => { if (res) pane.blocked = res; });
+        Hermes.refreshData();
+        Hermes.call("storage.stats", {}, res => { if (res) pane.storage = res; });
         Hermes.call("transcribe.get", {}, res => {
             if (res) pane.hermes = { transcribeInstalled: res.installed, transcribe: res.enabled, model: res.model || "" };
         });
@@ -299,6 +307,35 @@ Rectangle {
                 title: "WhatsApp compatibility"
                 value: Hermes.updateInfo ? "Web " + Hermes.updateInfo.waVersion + (Hermes.updateInfo.libraryOutdated ? " · update available: run hermes-update" : " · up to date") : "Web " + (Hermes.status.waVersion || "")
             }
+
+            // ---- Your data ----
+            SectionTitle { text: "Your data" }
+            Row2 {
+                icon: "description"
+                title: "Export folder"
+                value: pane.tilde(Hermes.dataInfo.exportDir) + " · export a chat from its info panel or Ctrl+K"
+                onClicked: exportFolder.open()
+            }
+            Row2 {
+                icon: "drive_file_move"
+                title: "Auto-file media"
+                value: (Hermes.dataInfo.rules || []).length === 0 ? "Copy matching attachments into folders, e.g. PDFs from College → ~/Documents/College"
+                    : (Hermes.dataInfo.rules.length === 1 ? "1 rule" : Hermes.dataInfo.rules.length + " rules")
+                onClicked: Hermes.autoFileRequested("", "")
+            }
+            Row2 {
+                icon: "backup"
+                title: "Encrypted backup"
+                value: Hermes.dataInfo.backup.last ? "Last backup " + new Date(Hermes.dataInfo.backup.last * 1000).toLocaleString(Qt.locale(), "d MMM, HH:mm") + " · " + pane.tilde(Hermes.dataInfo.backup.dir)
+                    : "Never backed up · passphrase-protected, saved to " + pane.tilde(Hermes.dataInfo.backup.dir)
+                onClicked: Hermes.backupRequested()
+            }
+            Row2 {
+                icon: "hard_drive"
+                title: "Storage"
+                value: pane.storage ? "Media " + (F.size(pane.storage.mediaBytes) || "0 B") + " · database " + F.size(pane.storage.dbBytes) + " · free up space" : "See what takes space and free some up"
+                onClicked: Hermes.storageRequested()
+            }
         }
     }
 
@@ -351,6 +388,16 @@ Rectangle {
             color: field.text.length > edit.limit ? Theme.error : Theme.fgSurfaceVariant
             font.family: Theme.monoFont
             font.pixelSize: 11
+        }
+    }
+
+    FolderDialog {
+        id: exportFolder
+        title: "Export chats into…"
+        currentFolder: "file://" + (Hermes.dataInfo.exportDir || pane.home)
+        onAccepted: {
+            const dir = decodeURIComponent(selectedFolder.toString().replace("file://", ""));
+            Hermes.act("data.setDirs", { exportDir: dir }, "Chats will export to " + pane.tilde(dir), () => Hermes.refreshData());
         }
     }
 }

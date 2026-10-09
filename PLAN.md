@@ -368,15 +368,33 @@ the home view groups chats by what they need from you, and chats are cleared, no
   the conversation view in read-only mode (no composer, no Done/Snooze/call/info), with 👁 view counts and aggregate
   reaction chips. Live: 2 followed channels listed with pictures; fetch stored 39 posts.
 
-**Phase C is complete.** Remaining ideas: media-retry verification, OCR/summaries, Obsidian export, auto-filing media.
+**Phase C is complete.**
+
+### 2026-10-09: Phase D, your data
+- **Export** (`wa/export.go`, `export.chat`): one Markdown file per chat in the export folder (kv `export_dir`, default
+  `~/Documents/WhatsApp`; set to `~/Projects/BObs vault/WhatsApp` on this machine). YAML frontmatter (`whatsapp: <jid>`,
+  chat, type, messages, `tags: [whatsapp]`), the private note as a callout, `## YYYY-MM-DD (Day)` per day,
+  `**HH:MM · Name:** text`, quotes, reactions, voice transcripts. Downloaded media is copied to `attachments/<chat>/` and
+  embedded with relative `![](<…>)` links; undownloaded media becomes a placeholder (`download:true` fetches it first).
+  Re-export regenerates the file; a different chat with the same name gets `Name (<number>).md` (owner read from frontmatter).
+  Lines that would become headings/quotes/lists and `[[` are escaped. UI: chat info panel and Ctrl+K. CLI `hermes export`.
+- **Auto-file** (`wa/autofile.go`): rules in kv `autofile_rules` (chat or any, kind, extensions, name/caption match, folder).
+  The first matching rule downloads the attachment (≤200 MB) and copies it in; Hermes keeps its copy. The target path is
+  saved in `extra.filed` (document rows show "· in <folder>"). Also "Save to folder…" in the message menu (`messages.saveTo`).
+  UI: `AutoFileSheet` (Settings, chat info, Ctrl+K). CLI `hermes autofile [add|rm]`.
+- **Backup** (`wa/backup.go`, `internal/backup`): `VACUUM INTO` snapshot (Hermes + whatsmeow tables, so it includes the
+  device link) + optional media, tar.gz, encrypted with an age scrypt passphrase (≥8 chars). Written to kv `backup_dir`
+  (default `~/Documents/Hermes backups`), keeps the last 5. `hermes backup extract <file> <dir>` runs without hermesd and
+  only extracts into an empty folder; restoring is a manual copy with hermesd stopped. No scheduled backups (would need a
+  stored passphrase). Verified live: 6.4 MB backup, extracted DB passes integrity_check with all messages and the device row.
+- **Storage** (`wa/stats.go`): `storage.stats` (DB/media/cache bytes, per-chat messages + media) and `storage.clean`
+  (older-than / min-size / per-chat, dry run by default in the CLI). Only deletes files inside the media folder, keeps
+  starred messages, clears `media_path` so the message can be downloaded again. UI: `StorageSheet`; CLI `hermes storage`, `hermes clean`.
+- Gotcha: hermesd has `PrivateTmp=yes`, so an export/backup folder under `/tmp` lands in the service's private tmp.
 
 **Not done yet / next:**
-- [x] First real pairing (2026-10-09): QR link works
-- [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)
-- [ ] End-to-end testing on the live account
-- [ ] Status (stories) viewing/posting, channels UI, group admin actions, disappearing-message toggle, privacy/profile settings, block list
-- [x] Clavis bar module (2026-10-09): `clavis-module/` (HermesBarService singleton + Hermes pill + HermesPopup), symlinked as `Modules/Bar/Hermes` in clavis-shell (branch debian13-qt68), registered as bar component `hermes` in BarComponentLoader + PersonalizationConfig. Left click = latest 6 chats with quick reply, middle = focus mode, right = open Hermes. Must be imported (not Loader-by-URL): Quickshell only synthesizes qmldir for directories reached by an import
-- [ ] Inline notification replies (needs `inlineReplySupported` in Clavis' NotificationManager)
-- [ ] Snooze, remind-me, chat notes, snippets, Obsidian export, auto-filing media
-- [ ] Voice-note transcription (whisper.cpp), OCR, summaries
+- [ ] Phase E, intelligence: Tesseract OCR into search, digest mode for busy groups, date/to-do detection (→ Google Calendar),
+  on-demand translate, catch-up summaries (open question: Claude API or local LLM)
+- [ ] Live verification: media retry (phone awake), posting a status, group admin actions, receiving live statuses
+- [ ] Polish: smart folders, animations, performance with 100k+ messages
 - [ ] `sudo apt install qt6-image-formats-plugins` for native (animated) WebP stickers

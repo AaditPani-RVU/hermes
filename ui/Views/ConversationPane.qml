@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Quickshell
 import qs.Services
@@ -612,6 +613,17 @@ Rectangle {
             }
         }
         MenuItemRow {
+            visible: msgMenu.hasMedia && !msgMenu.msg.revoked && msgMenu.msg.type !== "sticker"
+            height: visible ? 42 : 0
+            icon: "drive_file_move"
+            text: "Save to folder…"
+            onTriggered: {
+                msgMenu.close();
+                saveFolder.msg = msgMenu.msg;
+                saveFolder.open();
+            }
+        }
+        MenuItemRow {
             icon: "delete"
             text: "Delete for me"
             danger: true
@@ -628,6 +640,17 @@ Rectangle {
     }
 
     // ---- dialogs ----
+    FolderDialog {
+        id: saveFolder
+        property var msg: ({})
+        title: "Save to folder"
+        onAccepted: {
+            const dir = decodeURIComponent(selectedFolder.toString().replace("file://", ""));
+            Hermes.act("messages.saveTo", { chat: Hermes.currentChat, id: msg.id, dir: dir }, "", (p, err) => {
+                if (!err) Hermes.toast("Saved to " + p.replace(Quickshell.env("HOME"), "~"), false);
+            });
+        }
+    }
     Sheet {
         id: pollSheet
         title: "Create poll"
