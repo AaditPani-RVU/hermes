@@ -224,7 +224,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		fmt.Print(usage + dataUsage)
+		fmt.Print(usage + dataUsage + intelUsage)
 		return nil
 	}
 	if ok, err := localCommand(args); ok {
@@ -237,6 +237,9 @@ func run(args []string) error {
 	defer c.conn.Close()
 	cmd, rest := args[0], args[1:]
 	if ok, err := dataCommand(c, cmd, rest); ok {
+		return err
+	}
+	if ok, err := intelCommand(c, cmd, rest); ok {
 		return err
 	}
 	switch cmd {

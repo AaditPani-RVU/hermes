@@ -33,7 +33,8 @@ Popup {
         { kind: "action", key: "export", name: "Export this chat to Markdown", icon: "description" },
         { kind: "action", key: "autofile", name: "Auto-file media rules", icon: "drive_file_move" },
         { kind: "action", key: "backup", name: "Back up Hermes", icon: "backup" },
-        { kind: "action", key: "storage", name: "Storage & cleanup", icon: "hard_drive" }
+        { kind: "action", key: "storage", name: "Storage & cleanup", icon: "hard_drive" },
+        { kind: "action", key: "summarize", name: "Summarise this chat", icon: "summarize" }
     ]
 
     function score(name, q) {

@@ -145,6 +145,13 @@ func run(log waLog.Logger, dataDir, cacheDir, sock string) error {
 	return core.Start(ctx)
 }
 
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
 // focusBlocks reports whether focus mode should silence this chat (VIPs always get through).
 func focusBlocks(ctx context.Context, st *hs.Store, chat string) bool {
 	until := st.GetKV(ctx, "focus_until")
@@ -849,6 +856,82 @@ func registerMethods(srv *rpc.Server, core *wa.Core, st *hs.Store, openUI func(s
 			return nil, err
 		}
 		return core.CleanMedia(ctx, p)
+	})
+	// Intelligence: OCR, local LLM (translate, summaries), digests
+	h("intel.get", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return map[string]any{
+			"ocrInstalled":  core.OCRInstalled(),
+			"ocr":           st.GetKV(ctx, "ocr") != "off",
+			"llm":           core.LLMStatus(ctx),
+			"translateLang": orDefault(st.GetKV(ctx, "translate_lang"), "English"),
+			"digest":        core.DigestChats(ctx),
+			"digestAI":      st.GetKV(ctx, "digest_ai") == "on",
+		}, nil
+	})
+	h("intel.set", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			OCR, LLM, DigestAI   *bool
+			Model, TranslateLang *string
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		onOff := func(b bool) string {
+			if b {
+				return "on"
+			}
+			return "off"
+		}
+		if p.OCR != nil {
+			_ = st.SetKV(ctx, "ocr", onOff(*p.OCR))
+		}
+		if p.LLM != nil {
+			_ = st.SetKV(ctx, "llm", onOff(*p.LLM))
+		}
+		if p.DigestAI != nil {
+			_ = st.SetKV(ctx, "digest_ai", onOff(*p.DigestAI))
+		}
+		if p.Model != nil {
+			_ = st.SetKV(ctx, "llm_model", strings.TrimSpace(*p.Model))
+		}
+		if p.TranslateLang != nil {
+			_ = st.SetKV(ctx, "translate_lang", strings.TrimSpace(*p.TranslateLang))
+		}
+		return nil, nil
+	})
+	h("messages.ocr", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[msgParam](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.ImageText(ctx, p.Chat, p.ID)
+	})
+	h("messages.translate", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Chat, ID, Lang string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.Translate(ctx, p.Chat, p.ID, p.Lang)
+	})
+	h("chats.summarize", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat, Scope, Token string
+			N                  int
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.Summarize(ctx, p.Chat, p.Scope, p.N, p.Token)
+	})
+	h("chats.setDigest", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat    string
+			Minutes int
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetDigest(ctx, p.Chat, p.Minutes)
 	})
 	h("updates.check", func(ctx context.Context, _ json.RawMessage) (any, error) { return core.CheckUpdates(ctx) })
 	h("ping", func(ctx context.Context, _ json.RawMessage) (any, error) { return "pong", nil })

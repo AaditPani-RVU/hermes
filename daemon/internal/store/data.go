@@ -111,3 +111,50 @@ func (s *Store) Snapshot(ctx context.Context, path string) error {
 	_, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, path)
 	return err
 }
+
+// SetOCR stores text found in an image ("" = scanned, nothing found).
+func (s *Store) SetOCR(ctx context.Context, chat, id, text string) error {
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO hermes_ocr (chat, id, text) VALUES (?,?,?)
+		ON CONFLICT(chat, id) DO UPDATE SET text=excluded.text`, chat, id, text)
+	return err
+}
+
+// OCR returns an image's text and whether it has been scanned.
+func (s *Store) OCR(ctx context.Context, chat, id string) (string, bool) {
+	var text string
+	err := s.DB.QueryRowContext(ctx, `SELECT text FROM hermes_ocr WHERE chat=? AND id=?`, chat, id).Scan(&text)
+	return text, err == nil
+}
+
+// UnscannedImages lists downloaded images that haven't been through OCR yet, newest first.
+func (s *Store) UnscannedImages(ctx context.Context, limit int) ([][2]string, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT m.chat, m.id FROM hermes_messages m
+		LEFT JOIN hermes_ocr o ON o.chat = m.chat AND o.id = m.id
+		WHERE m.type = 'image' AND m.media_path != '' AND m.revoked = 0 AND m.view_once = 0 AND o.id IS NULL
+		ORDER BY m.ts DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out [][2]string
+	for rows.Next() {
+		var c, id string
+		if err := rows.Scan(&c, &id); err != nil {
+			return nil, err
+		}
+		out = append(out, [2]string{c, id})
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) Translation(ctx context.Context, chat, id, lang string) string {
+	var text string
+	_ = s.DB.QueryRowContext(ctx, `SELECT text FROM hermes_translations WHERE chat=? AND id=? AND lang=?`, chat, id, lang).Scan(&text)
+	return text
+}
+
+func (s *Store) SetTranslation(ctx context.Context, chat, id, lang, text string) error {
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO hermes_translations (chat, id, lang, text) VALUES (?,?,?,?)
+		ON CONFLICT(chat, id, lang) DO UPDATE SET text=excluded.text`, chat, id, lang, text)
+	return err
+}

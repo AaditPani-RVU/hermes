@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -175,6 +176,21 @@ var chatMigrations = []string{
 	`ALTER TABLE hermes_chats ADD COLUMN note TEXT NOT NULL DEFAULT ''`,
 	`CREATE TABLE IF NOT EXISTS hermes_snippets (name TEXT PRIMARY KEY, text TEXT NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS hermes_status_seen (id TEXT PRIMARY KEY, ts INTEGER NOT NULL)`,
+	// Text found in images (OCR). A row with empty text means "scanned, nothing found".
+	`CREATE TABLE IF NOT EXISTS hermes_ocr (chat TEXT NOT NULL, id TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY (chat, id))`,
+	`CREATE VIRTUAL TABLE IF NOT EXISTS hermes_ocr_fts USING fts5(
+		text, content='hermes_ocr', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2')`,
+	`CREATE TRIGGER IF NOT EXISTS hermes_ocr_ai AFTER INSERT ON hermes_ocr BEGIN
+		INSERT INTO hermes_ocr_fts(rowid, text) VALUES (new.rowid, new.text);
+	END`,
+	`CREATE TRIGGER IF NOT EXISTS hermes_ocr_ad AFTER DELETE ON hermes_ocr BEGIN
+		INSERT INTO hermes_ocr_fts(hermes_ocr_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+	END`,
+	`CREATE TRIGGER IF NOT EXISTS hermes_ocr_au AFTER UPDATE OF text ON hermes_ocr BEGIN
+		INSERT INTO hermes_ocr_fts(hermes_ocr_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+		INSERT INTO hermes_ocr_fts(rowid, text) VALUES (new.rowid, new.text);
+	END`,
+	`CREATE TABLE IF NOT EXISTS hermes_translations (chat TEXT NOT NULL, id TEXT NOT NULL, lang TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY (chat, id, lang))`,
 }
 
 func Open(ctx context.Context, db *sql.DB) (*Store, error) {
@@ -664,13 +680,42 @@ func (s *Store) Search(ctx context.Context, query, chat string, limit int) ([]*S
 	}
 	terms[len(terms)-1] += "*"
 	q := strings.Join(terms, " ")
-	sqlq := `SELECT m.chat, m.id, m.sender, m.sender_name, m.from_me, m.ts, m.type, m.text, m.media_mime, m.media_path,
-		m.thumb_path, m.media_size, m.media_w, m.media_h, m.media_secs, m.file_name, m.quoted_id, m.quoted_sender,
-		m.quoted_text, m.status, m.edited, m.revoked, m.view_once, m.starred, m.extra, m.raw,
-		COALESCE(c.name, ''), snippet(hermes_messages_fts, 0, '«', '»', '…', 12)
+	out, err := s.searchFTS(ctx, `SELECT `+msgColsM+`, COALESCE(c.name, ''), snippet(hermes_messages_fts, 0, '«', '»', '…', 12)
 		FROM hermes_messages_fts f JOIN hermes_messages m ON m.rowid = f.rowid
 		LEFT JOIN hermes_chats c ON c.jid = m.chat
-		WHERE hermes_messages_fts MATCH ? AND m.revoked = 0`
+		WHERE hermes_messages_fts MATCH ? AND m.revoked = 0`, q, chat, limit)
+	if err != nil {
+		return nil, err
+	}
+	// Text inside images: shown with a 🔍 so it's clear the words are in the picture.
+	ocr, err := s.searchFTS(ctx, `SELECT `+msgColsM+`, COALESCE(c.name, ''), '🔍 ' || snippet(hermes_ocr_fts, 0, '«', '»', '…', 12)
+		FROM hermes_ocr_fts f JOIN hermes_ocr o ON o.rowid = f.rowid
+		JOIN hermes_messages m ON m.chat = o.chat AND m.id = o.id
+		LEFT JOIN hermes_chats c ON c.jid = m.chat
+		WHERE hermes_ocr_fts MATCH ? AND m.revoked = 0`, q, chat, limit)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, h := range out {
+		seen[h.Chat+"/"+h.ID] = true
+	}
+	for _, h := range ocr {
+		if !seen[h.Chat+"/"+h.ID] {
+			out = append(out, h)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].TS > out[j].TS })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// msgColsM is msgCols qualified with the "m" alias, for joins.
+var msgColsM = "m." + strings.ReplaceAll(strings.Join(strings.Fields(msgCols), " "), ", ", ", m.")
+
+func (s *Store) searchFTS(ctx context.Context, sqlq, q, chat string, limit int) ([]*SearchHit, error) {
 	args := []any{q}
 	if chat != "" {
 		sqlq += ` AND m.chat = ?`

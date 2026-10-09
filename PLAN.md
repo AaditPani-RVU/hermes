@@ -392,9 +392,31 @@ the home view groups chats by what they need from you, and chats are cleared, no
   starred messages, clears `media_path` so the message can be downloaded again. UI: `StorageSheet`; CLI `hermes storage`, `hermes clean`.
 - Gotcha: hermesd has `PrivateTmp=yes`, so an export/backup folder under `/tmp` lands in the service's private tmp.
 
+### 2026-10-09: Phase E, intelligence (all local)
+- Open question 2 answered: everything runs offline. **Ollama** was already on this machine (gemma3:4b, gemma4:e4b, qwen3:8b);
+  `wa/llm.go` talks to it (kv `llm_url`, `llm_model` = "" picks the first of gemma3:4b → qwen2.5:3b → … installed; kv `llm=off`
+  disables). Streaming `/api/chat`, `keep_alive` 10 m, `num_ctx` 8192, `<think>` blocks stripped. gemma3:4b: ~7 s cold load, then
+  ~30 tok/s on the GTX 1650; 50-message catch-up ≈ 17 s cold.
+- **Translate** (`messages.translate`, cached in `hermes_translations`): message menu → Translate; shown under the message,
+  Hide to dismiss. Prompt handles romanised Hindi/Kannada ("haan bhai…"). Target language kv `translate_lang` (default English).
+- **Catch-up summaries** (`chats.summarize` scope unread | recent n ≤ 400, streamed as `summary` events by token): header
+  button (only when a model is ready), Ctrl+K, `hermes catchup <chat> [--last N]`. Sections Gist / For you / Plans & dates / Decisions.
+- **Digest mode** (`wa/digest.go`, kv `digest_chats` {jid: minutes}): notifications for those chats are held and sent as one
+  roundup ("Hostel · 23 new / From Ravi, Asha and 3 others / last lines") every N minutes; mentions/replies to you bypass it;
+  reading the chat drops the pending digest. Optional one-line LLM gist (kv `digest_ai`). Chat info → Digest notifications;
+  `hermes digest <chat> <min|off>`.
+- **Dates in messages** (`Format.findWhen`, UI only; tests `node ui/tests/format.test.js`): "fri 5pm", "kal 6 baje", "15/10",
+  "12th oct at 9:30", "aaj raat", "parso shaam 5 baje"… read relative to when the message was sent; only upcoming ones get a chip.
+  Bare numbers and a lone "today" are ignored; 1–7 without am/pm means evening. Chip → Remind me then / an hour before
+  (Hermes reminder) or Add to Google Calendar (opens a prefilled event page; nothing is added automatically). To-do detection
+  beyond dates was left out: too noisy with regexes, and running the LLM on every message isn't worth it.
+- **OCR** (`wa/ocr.go`, `packaging/hermes-ocr-setup`): RapidOCR (ONNX, CPU) in `~/.local/share/hermes/ocr/venv`, ready once
+  `.ready` exists. One long-lived Python helper (`assets/ocr.py`, embedded) under `nice`, 2 threads, exits after 3 idle minutes.
+  New images are queued after download; a backfill scans 40 older downloaded images every 10 minutes. Text goes to `hermes_ocr`
+  + `hermes_ocr_fts`; search merges hits, marked 🔍. Message menu → Copy text from image (`messages.ocr`).
+- Settings → "Intelligence · runs on this computer": OCR, translate & summarise, model, translate language, digest gist.
+
 **Not done yet / next:**
-- [ ] Phase E, intelligence: Tesseract OCR into search, digest mode for busy groups, date/to-do detection (→ Google Calendar),
-  on-demand translate, catch-up summaries (open question: Claude API or local LLM)
 - [ ] Live verification: media retry (phone awake), posting a status, group admin actions, receiving live statuses
 - [ ] Polish: smart folders, animations, performance with 100k+ messages
 - [ ] `sudo apt install qt6-image-formats-plugins` for native (animated) WebP stickers

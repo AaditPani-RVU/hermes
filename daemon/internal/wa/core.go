@@ -42,6 +42,7 @@ type Notifier interface {
 	NotifyMessage(chat *hs.Chat, m *hs.Message)
 	NotifyCall(from string, video bool)
 	NotifyReminder(chat *hs.Chat, body string)
+	NotifyDigest(chat *hs.Chat, summary, body string)
 	NotifySystem(summary, body string)
 	Dismiss(chat string)
 }
@@ -66,6 +67,9 @@ type Core struct {
 	nameCache map[types.JID]string
 
 	transcribeQ chan transcribeJob
+	ocrQ        chan ocrJob
+	ocr         ocrState
+	digest      digestState
 	mediaWait   map[string]chan *events.MediaRetry // message ID -> waiter for a re-upload
 }
 
@@ -89,6 +93,7 @@ func New(log waLog.Logger, paths Paths, db *sql.DB, st *hs.Store) (*Core, error)
 		nameCache: map[types.JID]string{},
 
 		transcribeQ: make(chan transcribeJob, 256),
+		ocrQ:        make(chan ocrJob, 256),
 		mediaWait:   map[string]chan *events.MediaRetry{},
 	}
 	return c, nil
@@ -183,6 +188,8 @@ func (c *Core) Start(ctx context.Context) error {
 	go c.versionWatcher(ctx)
 	go c.schedulerLoop(ctx)
 	go c.transcribeLoop(ctx)
+	go c.ocrLoop(ctx)
+	go c.digestLoop(ctx)
 
 	if err := c.connect(ctx); err != nil {
 		return err

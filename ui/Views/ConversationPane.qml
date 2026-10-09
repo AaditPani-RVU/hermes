@@ -181,6 +181,12 @@ Rectangle {
                 onClicked: Hermes.toast("Calls aren't supported by the open WhatsApp protocol yet. Use your phone for calls.", false)
             }
             IconButton {
+                visible: Hermes.aiReady
+                icon: "summarize"
+                tip: "Catch up: summarise this chat (on this computer)"
+                onClicked: Hermes.summarizeRequested(Hermes.currentChat, pane.info ? pane.info.name : "", pane.info ? pane.info.unread : 0)
+            }
+            IconButton {
                 icon: "search"
                 tip: "Search in chat (Ctrl+F)"
                 onClicked: pane.searchInChat()
@@ -346,6 +352,11 @@ Rectangle {
                 onRemindRequested: pane.snoozeRequested(id)
                 highlighted: list.highlightId === id
                 onMenuRequested: (item, x, y) => msgMenu.show(Hermes.messages.get(index), item, x, y)
+                onWhenClicked: (item, when) => {
+                    whenMenu.when = when;
+                    whenMenu.msg = Hermes.messages.get(index);
+                    whenMenu.openAt(item, 0, item.height + 4);
+                }
                 onQuoteClicked: qid => {
                     const i = Hermes.msgIndex(qid);
                     if (i >= 0) {
@@ -581,6 +592,30 @@ Rectangle {
             onTriggered: { msgMenu.close(); Hermes.act("messages.transcribe", { chat: Hermes.currentChat, id: msgMenu.msg.id }); }
         }
         MenuItemRow {
+            visible: !!msgMenu.msg.text && !msgMenu.msg.revoked && msgMenu.msg.type !== "system"
+            height: visible ? 42 : 0
+            icon: "translate"
+            text: "Translate"
+            onTriggered: { msgMenu.close(); Hermes.translate(Hermes.currentChat, msgMenu.msg.id); }
+        }
+        MenuItemRow {
+            visible: msgMenu.msg.type === "image" && !msgMenu.msg.revoked
+            height: visible ? 42 : 0
+            icon: "document_scanner"
+            text: "Copy text from image"
+            onTriggered: {
+                msgMenu.close();
+                const id = msgMenu.msg.id;
+                Hermes.toast("Reading the image…", false);
+                Hermes.act("messages.ocr", { chat: Hermes.currentChat, id: id }, "", (text, err) => {
+                    if (err) return;
+                    if (!text) { Hermes.toast("No text found in this image", false); return; }
+                    Quickshell.clipboardText = text;
+                    Hermes.toast("Copied " + text.split("\n").length + " lines of text", false);
+                });
+            }
+        }
+        MenuItemRow {
             icon: "alarm"
             text: "Remind me about this…"
             onTriggered: { msgMenu.close(); pane.snoozeRequested(msgMenu.msg.id); }
@@ -636,6 +671,43 @@ Rectangle {
             text: "Delete for everyone"
             danger: true
             onTriggered: { msgMenu.close(); Hermes.act("messages.delete", { chat: Hermes.currentChat, id: msgMenu.msg.id, forEveryone: true }); }
+        }
+    }
+
+    // Date chip menu: reminders stay in Hermes; the calendar opens prefilled for you to check and save.
+    PopupMenu {
+        id: whenMenu
+        width: 280
+        property var when: null
+        property var msg: ({})
+        function remind(ts) {
+            Hermes.act("chats.snooze", { chat: Hermes.currentChat, until: ts, msg: msg.id }, "I'll remind you " + F.whenLabel(ts));
+        }
+        MenuItemRow {
+            visible: !!whenMenu.when && whenMenu.when.ts > Date.now() / 1000
+            height: visible ? 42 : 0
+            icon: "alarm"
+            text: whenMenu.when ? "Remind me " + (whenMenu.when.hasTime ? "at " : "on ") + whenMenu.when.label : ""
+            onTriggered: { whenMenu.close(); whenMenu.remind(whenMenu.when.ts); }
+        }
+        MenuItemRow {
+            visible: !!whenMenu.when && whenMenu.when.hasTime && whenMenu.when.ts - 3600 > Date.now() / 1000
+            height: visible ? 42 : 0
+            icon: "alarm_add"
+            text: "Remind me an hour before"
+            onTriggered: { whenMenu.close(); whenMenu.remind(whenMenu.when.ts - 3600); }
+        }
+        MenuItemRow {
+            icon: "calendar_add_on"
+            text: "Add to Google Calendar…"
+            onTriggered: {
+                whenMenu.close();
+                const who = Hermes.currentInfo ? Hermes.currentInfo.name : "";
+                const t = (whenMenu.msg.text || "").replace(/\s+/g, " ");
+                const title = t.length > 60 ? t.slice(0, 57) + "…" : t;
+                Qt.openUrlExternally(F.calendarUrl(title, whenMenu.when.ts, whenMenu.when.hasTime,
+                    (whenMenu.msg.fromMe ? "You" : (whenMenu.msg.senderName || who)) + " in " + who + ":\n" + whenMenu.msg.text));
+            }
         }
     }
 

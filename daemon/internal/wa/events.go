@@ -333,7 +333,7 @@ func (c *Core) handleMessage(ctx context.Context, evt *events.Message, live bool
 		}
 	}
 	if incUnread && c.Notify != nil {
-		if ch, _ := c.GetChat(ctx, chat); ch != nil && ch.MutedUntil <= time.Now().Unix() {
+		if ch, _ := c.GetChat(ctx, chat); ch != nil && ch.MutedUntil <= time.Now().Unix() && !c.holdForDigest(ctx, ch, m) {
 			c.Notify.NotifyMessage(ch, m)
 		}
 	}

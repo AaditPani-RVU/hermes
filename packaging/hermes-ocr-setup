@@ -1,0 +1,19 @@
+#!/bin/sh
+# Set up local OCR for Hermes: a Python venv with RapidOCR (ONNX, CPU) in ~/.local/share/hermes/ocr.
+# Text found in images becomes searchable; images never leave this computer. Needs uv (or python3 -m venv + pip).
+set -eu
+DIR="$HOME/.local/share/hermes/ocr"
+mkdir -p "$DIR"
+cd "$DIR"
+export UV_HTTP_TIMEOUT=600
+if command -v uv >/dev/null 2>&1; then
+    [ -x venv/bin/python ] || uv venv -q --python 3.12 venv
+    uv pip install -q --python venv/bin/python rapidocr onnxruntime
+else
+    [ -x venv/bin/python ] || python3 -m venv venv
+    venv/bin/pip install -q rapidocr onnxruntime
+fi
+echo "→ downloading OCR models (first run)"
+venv/bin/python -c "from rapidocr import RapidOCR; RapidOCR()" >/dev/null
+touch .ready
+echo "✓ OCR ready. Restart hermesd: systemctl --user restart hermesd"

@@ -92,6 +92,9 @@ func (c *Core) DownloadMedia(ctx context.Context, chat, id string) (string, erro
 	}
 	_ = c.Store.SetMediaPath(ctx, chat, id, path)
 	c.Emit("media", map[string]any{"chat": chat, "id": id, "path": path})
+	if m.Type == "image" && !m.ViewOnce {
+		c.queueOCR(ctx, chat, id)
+	}
 	return path, nil
 }
 

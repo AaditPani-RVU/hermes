@@ -45,6 +45,7 @@ Item {
     signal remindRequested
     signal quoteClicked(string id)
     signal mediaOpened(string path, string kind)
+    signal whenClicked(var item, var when)
 
     readonly property int gutter: 72
     readonly property real maxBubble: Math.max(200, Math.min(720, width - gutter - 32))
@@ -57,6 +58,10 @@ Item {
     readonly property bool bare: (type === "sticker" || (type === "text" && F.isJumboEmoji(text))) && !quotedId && !revoked
     readonly property bool isMedia: (type === "image" || type === "video" || type === "gif") && !revoked
     readonly property bool isAudio: type === "voice" || type === "audio"
+    // First upcoming date/time mentioned ("fri 5pm", "kal 6 baje"), for the calendar chip.
+    readonly property var when: root.revoked || root.text === "" || root.type === "system" || root.isAudio && root.transcriptState !== "done"
+        ? null : F.findWhen(root.text, root.ts)
+    readonly property string translation: Hermes.translations[root.chat + "/" + root.id] || ""
     readonly property string transcriptState: isAudio ? (extraObj.transcript || "") : ""
     // Something aimed at you: an @-mention or a reply to your message.
     readonly property bool forMe: !fromMe && !revoked && (quotedSender === "You" || /(^|\s)@You\b/.test(text))
@@ -351,6 +356,72 @@ Item {
                         enabled: body.hoveredLink !== ""
                         cursorShape: Qt.PointingHandCursor
                     }
+                }
+
+                // On-demand translation (message menu → Translate)
+                Rectangle {
+                    visible: root.translation !== ""
+                    Layout.fillWidth: true
+                    implicitHeight: trCol.implicitHeight + 16
+                    radius: Theme.radiusSm
+                    color: Theme.alpha(Theme.secondary, 0.08)
+                    Column {
+                        id: trCol
+                        x: 10
+                        y: 8
+                        width: parent.width - 20
+                        spacing: 3
+                        Row {
+                            spacing: 5
+                            Icon { name: "translate"; size: 14; color: Theme.secondary; anchors.verticalCenter: parent.verticalCenter }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                textFormat: Text.StyledText
+                                text: (root.translation === "…" ? "Translating…" : "Translated") + " · <a href='hide'>Hide</a>"
+                                linkColor: Theme.secondary
+                                color: Theme.secondary
+                                font.family: Theme.font
+                                font.pixelSize: 11
+                                onLinkActivated: Hermes.hideTranslation(root.chat, root.id)
+                            }
+                        }
+                        Text {
+                            visible: root.translation !== "…"
+                            width: parent.width
+                            wrapMode: Text.Wrap
+                            text: root.translation
+                            color: Theme.fgSurface
+                            font.family: Theme.font
+                            font.pixelSize: 14
+                        }
+                    }
+                }
+
+                // A date or time in the message: click for remind-me / add to calendar
+                Rectangle {
+                    id: whenChip
+                    visible: root.when !== null
+                    implicitHeight: 26
+                    implicitWidth: whenRow.implicitWidth + 18
+                    radius: 13
+                    color: whenHover.hovered ? Theme.alpha(Theme.tertiary, 0.22) : Theme.alpha(Theme.tertiary, 0.12)
+                    Row {
+                        id: whenRow
+                        anchors.centerIn: parent
+                        spacing: 5
+                        Icon { name: "event"; size: 15; color: Theme.tertiary; anchors.verticalCenter: parent.verticalCenter }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.when ? root.when.label : ""
+                            color: Theme.tertiary
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                    HoverHandler { id: whenHover; cursorShape: Qt.PointingHandCursor }
+                    Tip { shown: whenHover.hovered; text: "Remind me or add to calendar" }
+                    TapHandler { onTapped: root.whenClicked(whenChip, root.when) }
                 }
 
                 // Reactions: click one to add or remove yours

@@ -410,6 +410,11 @@ ShellRoot {
                 case "autofile": autoFileSheet.openFor("", ""); break;
                 case "backup": backupSheet.open(); break;
                 case "storage": storageSheet.open(); break;
+                case "summarize":
+                    if (!Hermes.currentChat) Hermes.toast("Open a chat first", false);
+                    else if (!Hermes.aiReady) Hermes.toast("Set up a local model first: Settings → Intelligence", false);
+                    else summarySheet.openFor(Hermes.currentChat, Hermes.currentInfo ? Hermes.currentInfo.name : "", Hermes.currentInfo ? Hermes.currentInfo.unread : 0);
+                    break;
                 }
             }
         }
@@ -427,6 +432,9 @@ ShellRoot {
         }
         StorageSheet {
             id: storageSheet
+        }
+        SummarySheet {
+            id: summarySheet
         }
         StatusComposer {
             id: statusComposer
@@ -481,6 +489,9 @@ ShellRoot {
         }
         function onStorageRequested() {
             storageSheet.open();
+        }
+        function onSummarizeRequested(jid, name, unread) {
+            summarySheet.openFor(jid, name, unread);
         }
         function onIncomingCall(name, video) {
             callBanner.who = name;

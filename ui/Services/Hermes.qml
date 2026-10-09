@@ -42,6 +42,12 @@ Singleton {
     signal autoFileRequested(string jid, string name) // jid "" = rule for any chat
     signal backupRequested
     signal storageRequested
+    // Intelligence: OCR, local LLM, digests
+    property var intel: ({ ocrInstalled: false, ocr: true, llm: { available: false, models: [], model: "", enabled: true }, translateLang: "English", digest: ({}), digestAI: false })
+    readonly property bool aiReady: intel.llm.available && intel.llm.enabled
+    property var translations: ({}) // "chat/id" -> text ("…" while translating)
+    signal summaryUpdate(string token, string text, bool done)
+    signal summarizeRequested(string jid, string name, int unread)
     property var dataInfo: ({ exportDir: "", rules: [], backup: { dir: "", last: 0, list: [] } })
     property var channels: []
     readonly property bool currentIsChannel: currentChat.endsWith("@newsletter")
@@ -108,6 +114,36 @@ Singleton {
             const missing = res.missing > 0 ? " (" + res.missing + " attachments not downloaded)" : "";
             toast("Exported " + res.messages + " messages to " + res.path.replace(Quickshell.env("HOME"), "~") + missing, false);
         });
+    }
+
+    function refreshIntel(cb) {
+        call("intel.get", {}, (res, err) => {
+            if (res) {
+                if (!res.digest) res.digest = {};
+                root.intel = res;
+            }
+            if (cb) cb(res, err);
+        });
+    }
+
+    function _setTranslation(key, text) {
+        const t = Object.assign({}, translations);
+        if (text) t[key] = text; else delete t[key];
+        translations = t;
+    }
+    function translate(chat, id) {
+        const key = chat + "/" + id;
+        _setTranslation(key, "…");
+        call("messages.translate", { chat: chat, id: id }, (res, err) => {
+            if (err) {
+                _setTranslation(key, "");
+                toast("Couldn't translate: " + err, true);
+            } else
+                _setTranslation(key, res.text);
+        });
+    }
+    function hideTranslation(chat, id) {
+        _setTranslation(chat + "/" + id, "");
     }
 
     function rulesFor(jid) {
@@ -189,6 +225,7 @@ Singleton {
         refreshScheduled();
         refreshSnippets();
         refreshData();
+        refreshIntel();
         refreshStatus();
         if (currentChat)
             loadMessages(currentChat);
@@ -807,6 +844,9 @@ Singleton {
             break;
         case "snippets.changed":
             refreshSnippets();
+            break;
+        case "summary":
+            summaryUpdate(data.token, data.text, data.done);
             break;
         case "scheduled":
         case "scheduled.changed":

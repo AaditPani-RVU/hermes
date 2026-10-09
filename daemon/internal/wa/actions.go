@@ -80,6 +80,7 @@ func (c *Core) ListChats(ctx context.Context, archived bool) ([]*hs.Chat, error)
 
 // MarkRead sends read receipts for unread incoming messages and clears the badge.
 func (c *Core) MarkRead(ctx context.Context, chat string) error {
+	c.clearDigest(chat)
 	ch, err := c.Store.GetChat(ctx, chat)
 	if err != nil || ch == nil {
 		return err

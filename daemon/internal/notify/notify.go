@@ -196,6 +196,33 @@ func (n *Notifier) NotifyMessage(chat *hs.Chat, m *hs.Message) {
 
 // NotifyReminder announces a snoozed chat coming back. It bypasses focus mode:
 // the user asked to be reminded.
+// NotifyDigest shows one roundup for a chat whose messages were held back (digest mode).
+func (n *Notifier) NotifyDigest(chat *hs.Chat, summary, body string) {
+	if n.Quiet != nil && n.Quiet(chat.JID) {
+		return
+	}
+	hints := map[string]dbus.Variant{
+		"desktop-entry": dbus.MakeVariant("hermes"),
+		"category":      dbus.MakeVariant("im.received"),
+	}
+	if chat.AvatarPath != "" {
+		hints["image-path"] = dbus.MakeVariant(chat.AvatarPath)
+	}
+	n.mu.Lock()
+	replaces := n.byChat[chat.JID]
+	delete(n.lines, chat.JID) // the next single message starts a fresh stack
+	n.mu.Unlock()
+	id := n.send(replaces, n.appIcon(), summary, html.EscapeString(body),
+		[]string{"default", "Open", "read", "Mark as read"}, hints)
+	if id == 0 {
+		return
+	}
+	n.mu.Lock()
+	n.byChat[chat.JID] = id
+	n.chatFor[id] = chat.JID
+	n.mu.Unlock()
+}
+
 func (n *Notifier) NotifyReminder(chat *hs.Chat, body string) {
 	hints := map[string]dbus.Variant{
 		"desktop-entry": dbus.MakeVariant("hermes"),

@@ -417,6 +417,16 @@ Rectangle {
 
             SettingRow {
                 visible: !!panel.info
+                icon: "notifications_paused"
+                label: "Digest notifications"
+                value: {
+                    const m = panel.info ? (Hermes.intel.digest[panel.info.jid] || 0) : 0;
+                    return m === 0 ? "Off: a notification per message" : "One roundup every " + (m >= 60 ? (m / 60) + " h" : m + " min") + " · mentions still ping";
+                }
+                onClicked: item => digestMenu.openAt(item, item.width - digestMenu.width - 16, item.height)
+            }
+            SettingRow {
+                visible: !!panel.info
                 icon: "description"
                 label: "Export to Markdown"
                 value: Hermes.dataInfo.exportDir ? Hermes.dataInfo.exportDir.replace(Quickshell.env("HOME"), "~") : ""
@@ -475,6 +485,24 @@ Rectangle {
                     dmMenu.close();
                     Hermes.act("chats.setDisappearing", { chat: panel.info.jid, seconds: modelData.s },
                                modelData.s ? "New messages disappear after " + modelData.t : "Disappearing messages off");
+                }
+            }
+        }
+    }
+
+    PopupMenu {
+        id: digestMenu
+        width: 220
+        Repeater {
+            model: [{ m: 0, t: "Off" }, { m: 30, t: "Every 30 minutes" }, { m: 60, t: "Every hour" }, { m: 180, t: "Every 3 hours" }]
+            MenuItemRow {
+                required property var modelData
+                icon: panel.info && (Hermes.intel.digest[panel.info.jid] || 0) === modelData.m ? "radio_button_checked" : "radio_button_unchecked"
+                text: modelData.t
+                onTriggered: {
+                    digestMenu.close();
+                    Hermes.act("chats.setDigest", { chat: panel.info.jid, minutes: modelData.m },
+                               modelData.m ? "Notifications from " + panel.info.name + " arrive as a roundup" : "Digest off", () => Hermes.refreshIntel());
                 }
             }
         }

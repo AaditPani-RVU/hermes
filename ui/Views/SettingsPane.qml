@@ -29,6 +29,7 @@ Rectangle {
         });
         Hermes.call("blocklist.get", {}, res => { if (res) pane.blocked = res; });
         Hermes.refreshData();
+        Hermes.refreshIntel();
         Hermes.call("storage.stats", {}, res => { if (res) pane.storage = res; });
         Hermes.call("transcribe.get", {}, res => {
             if (res) pane.hermes = { transcribeInstalled: res.installed, transcribe: res.enabled, model: res.model || "" };
@@ -308,6 +309,115 @@ Rectangle {
                 value: Hermes.updateInfo ? "Web " + Hermes.updateInfo.waVersion + (Hermes.updateInfo.libraryOutdated ? " · update available: run hermes-update" : " · up to date") : "Web " + (Hermes.status.waVersion || "")
             }
 
+            // ---- Intelligence ----
+            SectionTitle { text: "Intelligence · runs on this computer" }
+            Item {
+                width: parent.width
+                height: 64
+                Column {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 22
+                    anchors.right: ocrT.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+                    Text { text: "Search text in images"; color: Theme.fgSurface; font.family: Theme.font; font.pixelSize: 14 }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: Hermes.intel.ocrInstalled ? "Screenshots, receipts and notices become searchable (RapidOCR)" : "Not set up: run hermes-ocr-setup"
+                        color: Theme.fgSurfaceVariant
+                        font.family: Theme.font
+                        font.pixelSize: 12
+                    }
+                }
+                Toggle {
+                    id: ocrT
+                    enabled: Hermes.intel.ocrInstalled
+                    opacity: enabled ? 1 : 0.4
+                    anchors.right: parent.right
+                    anchors.rightMargin: 20
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: Hermes.intel.ocrInstalled && Hermes.intel.ocr
+                    onToggled: Hermes.act("intel.set", { ocr: checked }, "", () => Hermes.refreshIntel())
+                }
+            }
+            Item {
+                width: parent.width
+                height: 64
+                Column {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 22
+                    anchors.right: llmT.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+                    Text { text: "Translate & summarise"; color: Theme.fgSurface; font.family: Theme.font; font.pixelSize: 14 }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: Hermes.intel.llm.available ? "Local model via Ollama; only runs when you ask" : (Hermes.intel.llm.error || "Needs Ollama")
+                        color: Hermes.intel.llm.available ? Theme.fgSurfaceVariant : Theme.error
+                        font.family: Theme.font
+                        font.pixelSize: 12
+                    }
+                }
+                Toggle {
+                    id: llmT
+                    enabled: Hermes.intel.llm.available
+                    opacity: enabled ? 1 : 0.4
+                    anchors.right: parent.right
+                    anchors.rightMargin: 20
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: Hermes.intel.llm.available && Hermes.intel.llm.enabled
+                    onToggled: Hermes.act("intel.set", { llm: checked }, "", () => Hermes.refreshIntel())
+                }
+            }
+            Row2 {
+                visible: Hermes.aiReady
+                icon: "neurology"
+                title: "Model"
+                value: (Hermes.intel.llm.model || "") + (Hermes.intel.llm.chosen ? "" : " (automatic)") + " · " + Hermes.intel.llm.models.length + " installed"
+                onClicked: item => modelMenu.openAt(item, item.width - modelMenu.width - 16, item.height - 6)
+            }
+            Row2 {
+                visible: Hermes.aiReady
+                icon: "translate"
+                title: "Translate into"
+                value: Hermes.intel.translateLang
+                onClicked: edit.open2("Translate messages into", Hermes.intel.translateLang, 30, t => Hermes.act("intel.set", { translateLang: t }, "Translations will be in " + t, () => Hermes.refreshIntel()))
+            }
+            Item {
+                visible: Hermes.aiReady
+                width: parent.width
+                height: visible ? 64 : 0
+                Column {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 22
+                    anchors.right: dgT.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 2
+                    Text { text: "One-line gist in digests"; color: Theme.fgSurface; font.family: Theme.font; font.pixelSize: 14 }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Digest roundups say what happened, not just who wrote. " + (Object.keys(Hermes.intel.digest).length === 1 ? "1 chat" : Object.keys(Hermes.intel.digest).length + " chats") + " in digest mode (set in chat info)"
+                        color: Theme.fgSurfaceVariant
+                        font.family: Theme.font
+                        font.pixelSize: 12
+                    }
+                }
+                Toggle {
+                    id: dgT
+                    anchors.right: parent.right
+                    anchors.rightMargin: 20
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: Hermes.intel.digestAI
+                    onToggled: Hermes.act("intel.set", { digestAI: checked }, "", () => Hermes.refreshIntel())
+                }
+            }
+
             // ---- Your data ----
             SectionTitle { text: "Your data" }
             Row2 {
@@ -356,6 +466,25 @@ Rectangle {
                         Hermes.toast("Pick the excluded contacts on your phone; Hermes keeps that list as is", false);
                     pane.setPrivacy(choice.row.key, modelData);
                 }
+            }
+        }
+    }
+
+    PopupMenu {
+        id: modelMenu
+        width: 260
+        MenuItemRow {
+            icon: !Hermes.intel.llm.chosen ? "radio_button_checked" : "radio_button_unchecked"
+            text: "Automatic (smallest good one)"
+            onTriggered: { modelMenu.close(); Hermes.act("intel.set", { model: "" }, "", () => Hermes.refreshIntel()); }
+        }
+        Repeater {
+            model: Hermes.intel.llm.models
+            MenuItemRow {
+                required property string modelData
+                icon: Hermes.intel.llm.chosen === modelData ? "radio_button_checked" : "radio_button_unchecked"
+                text: modelData
+                onTriggered: { modelMenu.close(); Hermes.act("intel.set", { model: modelData }, "Using " + modelData, () => Hermes.refreshIntel()); }
             }
         }
     }
