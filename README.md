@@ -1,66 +1,189 @@
+<div align="center">
+
+<img src="packaging/hermes.svg" width="96" alt="Hermes logo">
+
 # Hermes
 
-A native WhatsApp client for Linux, built for [niri](https://github.com/YaLTeR/niri) and the Clavis Quickshell desktop.
+**A native WhatsApp client for Linux that treats your messages like an inbox, not a feed.**
 
-Hermes is organised around a **triage inbox** rather than a chat list: chats are grouped by what they need from you
-(*Needs reply*, *Mentions*, *FYI*, *Waiting on them*, *Snoozed*) and you clear them with the keyboard,
-like an email client such as Superhuman.
+Built for the [niri](https://github.com/YaLTeR/niri) compositor and [Quickshell](https://quickshell.outfoxxed.me/) desktops.
+Keyboard-first, wallpaper-themed, and with a daemon that keeps working when the window is closed.
 
-> **Unofficial.** Hermes is not affiliated with, endorsed by, or connected to WhatsApp or Meta.
-> It links to your account as a companion device (like WhatsApp Web) using the open-source
-> [whatsmeow](https://github.com/tulir/whatsmeow) library. Using third-party clients is against WhatsApp's
-> Terms of Service and may get your account restricted. Use at your own risk, and only with your own account.
+![Go](https://img.shields.io/badge/daemon-Go-00ADD8?logo=go&logoColor=white)
+![Qt](https://img.shields.io/badge/UI-Qt%206%20%2F%20QML-41CD52?logo=qt&logoColor=white)
+![Linux](https://img.shields.io/badge/platform-Linux%20%C2%B7%20Wayland-FCC624?logo=linux&logoColor=black)
+![Status](https://img.shields.io/badge/status-personal%20project-a1cafd)
 
-## Features
+<img src="docs/inbox.png" alt="Hermes triage inbox" width="100%">
 
-- **Triage inbox:** `j`/`k` to move, `e` done, `s` snooze, `Ctrl+E` done and open next, "remind me about this message".
-  Snoozed chats come back with a notification.
-- **Messaging:** text with formatting, replies, mentions, reactions, edits, deletes, forwards, stars, polls.
-- **Media:** photos, video, GIFs, voice notes (record and play), documents, stickers, locations, contacts.
-- **Sync with your phone:** archive, pin, mute, read state; history sync; read receipts, typing, online status.
-- **Productivity:** full-text search across all chats, scheduled messages, focus mode with a VIP list,
-  per-chat drafts, `Ctrl+K` command palette.
-- **Desktop integration:** grouped notifications, a status-bar module with quick reply, a niri keybind,
-  and colours that follow your wallpaper (Material 3 via matugen).
-- **CLI:** `hermes inbox`, `hermes send "Mom" "on my way"`, `hermes search invoice`, `hermes schedule …`.
-- **Keeps up with WhatsApp:** tracks the current WhatsApp Web version automatically; `hermes-update`
-  pulls protocol-library updates, tests, rebuilds and rolls back on failure.
+</div>
 
-Calls and payments are not supported (no open implementation exists).
+> [!WARNING]
+> **Hermes is unofficial.** It is not affiliated with, endorsed by, or connected to WhatsApp or Meta.
+> It links to your account the same way WhatsApp Web does, using the open-source
+> [whatsmeow](https://github.com/tulir/whatsmeow) library. Third-party clients are against WhatsApp's
+> Terms of Service and can get an account restricted. Use it with your own account, at your own risk.
 
-## Architecture
+---
 
+## Why another WhatsApp client?
+
+Every WhatsApp client, official or not, shows you the same thing: a list of chats sorted by whoever spoke last.
+A family group posting memes pushes your manager's question off the screen. You read a message on the bus,
+mean to reply later, and it's gone, because "read" looks exactly like "dealt with".
+
+Hermes asks a different question: **what needs you?** It sorts every conversation into a short triage inbox
+and lets you clear it with the keyboard, the way an email client like Superhuman or Gmail's "Done" works.
+When the inbox is empty, you're actually done.
+
+## The inbox
+
+| Section | What lands here | Why |
+|---|---|---|
+| **Needs reply** | Someone wrote to you in the last 7 days, and you haven't answered or cleared it | *Read but unanswered* still counts; that's the whole point. Oldest first, so whoever has waited longest is on top. |
+| **Mentions** | Someone @-mentioned you or replied to your message in a group | Shows up even in muted groups. Answering or clearing it removes it. |
+| **FYI** | Unread group chatter, muted chats, and DMs from senders you've never written to | Delivery updates and verification codes stay out of *Needs reply*. One button clears them all. |
+| **Waiting on them** | DMs where you sent the last message (last 3 days) | The ball is in their court. Collapsed by default. |
+| **Snoozed** | Chats you've hidden until a time you picked | They come back to *Needs reply* with a notification. A new message brings them back early. |
+
+Everything else is **done**: answered, cleared, muted, archived or older than a week. The full chat list is
+still one click away under **All**.
+
+Marking a chat done or snoozing it also marks it read on WhatsApp. Done and snooze themselves live only in Hermes;
+your phone shows the chat as normal.
+
+<img src="docs/convo.png" alt="A conversation in Hermes with Done and Snooze in the header" width="100%">
+
+### Keyboard
+
+| Key | Action | | Key | Action |
+|---|---|---|---|---|
+| `j` / `k` | Move through the inbox | | `Ctrl+E` | Done, and open the next chat |
+| `Enter` | Open chat | | `Ctrl+S` | Snooze the open chat |
+| `e` | Done | | `Ctrl+Shift+E` | Undo done |
+| `s` | Snooze (`1`–`6` picks a time) | | `Ctrl+Tab` | Next chat in the inbox |
+| `u` | Mark unread | | `Ctrl+K` | Command palette: jump to any chat or action |
+| `Shift+E` | Undo | | `Esc` | Back to the inbox |
+
+In a chat: `Enter` sends, `Shift+Enter` adds a new line, `Ctrl+Enter` schedules, `↑` edits your last message,
+and right-clicking a message gives **Remind me about this…**
+
+## Everything else it does
+
+- **Messaging:** text with `*bold*` `_italic_` `~strike~` `` `code` `` formatting, replies, mentions, reactions,
+  editing, delete for everyone or for you, forwarding, starring, polls (create, vote, live results).
+- **Media:** photos, video, GIFs, voice notes (record from your mic, waveform, 1×/1.5×/2× playback),
+  documents, stickers (including animated), locations and contact cards. Drag and drop files to send them.
+- **Stays in sync with your phone:** archive, pin, mute and read state go both ways. History syncs when you link,
+  and older history is fetched on demand. Delivery and read ticks, typing indicators, online status.
+- **Search:** full-text search across every chat, plus a starred-messages view.
+- **Later:** schedule a message for a specific time; the daemon sends it even if the window is closed.
+- **Focus mode:** silence notifications from everyone except a VIP list.
+- **Desktop:** notifications grouped per chat with *Open* and *Mark read* buttons, a status-bar widget with
+  quick reply, a niri keybind, and Material 3 colours that follow your wallpaper.
+- **Terminal:** a `hermes` CLI for scripts and status bars (see below).
+
+**Not supported:** voice and video calls (no open-source implementation exists; Hermes shows the incoming
+call and tells you to pick up on your phone) and WhatsApp Pay.
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph clients [" "]
+        UI["hermes-ui<br/><sub>Quickshell / QML window</sub>"]
+        BAR["Status-bar widget<br/><sub>unread + quick reply</sub>"]
+        CLI["hermes CLI"]
+    end
+    UI & BAR & CLI <-->|"JSON-RPC over a Unix socket<br/>$XDG_RUNTIME_DIR/hermes.sock"| D
+    subgraph D ["hermesd · Go · systemd user service"]
+        WA["whatsmeow<br/><sub>multi-device protocol, end-to-end encryption</sub>"]
+        DB[("SQLite<br/><sub>messages, full-text search, triage state</sub>")]
+        N["notifications · scheduler · media"]
+    end
+    WA <-->|"encrypted WebSocket"| S["WhatsApp servers"]
 ```
-hermes-ui (Quickshell/QML) ──┐
-Clavis bar module (QML) ─────┼── JSON-RPC over a Unix socket ── hermesd (Go, systemd --user)
-hermes CLI ──────────────────┘                                    ├─ whatsmeow (multi-device protocol, E2E)
-                                                                  ├─ SQLite + FTS5 (messages, search, triage)
-                                                                  └─ notifications, scheduler, media pipeline
-```
 
-The daemon owns the connection, so notifications and scheduled messages work with no window open.
+**Linking.** Hermes registers as a *linked device* on your account, exactly like WhatsApp Web or the
+desktop app. You scan a QR code (or type a pairing code) from *WhatsApp → Linked devices* on your phone.
+After that your phone doesn't need to be online.
+
+**The daemon does the work.** `hermesd` runs in the background as a systemd user service. It holds the
+connection, decrypts messages, stores them, downloads media and sends notifications. The window, the bar widget
+and the CLI are thin clients that talk to it over a local socket. So you get notifications with no window
+open, scheduled messages go out on time, and the UI can be closed or restarted without losing anything.
+
+**Your data stays on your machine.** Messages, media and encryption keys live in `~/.local/share/hermes`
+(a SQLite database and a media folder). Nothing goes anywhere except to WhatsApp itself. That folder is
+never part of this repository.
+
+**Triage is computed, not stored per message.** For each chat the daemon tracks a few timestamps:
+when you last replied, when you were last mentioned, when you marked it done, and when a snooze ends.
+It works out the inbox section from those whenever a chat changes. The rules are a small pure function
+(`store.Bucket`) with unit tests.
+
+**Keeping up with WhatsApp.** WhatsApp changes its protocol often. Hermes checks the current WhatsApp Web
+version every six hours and reconnects with it when the server says the client is outdated. It also checks
+daily for updates to the whatsmeow library and tells you when to run `hermes-update`, which updates,
+tests, rebuilds and restarts, and rolls back if anything fails.
+
+**Playing nice.** Every outgoing message is one you wrote or explicitly scheduled. There are no auto-replies,
+bulk sends or scraping, and scheduled messages are spaced out so nothing bursts. Hermes only shows you as
+online while its window is focused, so your phone keeps getting push notifications.
 
 ## Install
 
-Requires Go 1.27+, [Quickshell](https://quickshell.outfoxxed.me/) 0.3+, Qt 6.8, ffmpeg, mpv and PipeWire.
+You need Linux on Wayland with **Go 1.27+**, **Quickshell 0.3+** (Qt 6.8), **ffmpeg**, **mpv** and **PipeWire**.
 Everything installs into `~/.local`; no root needed.
 
 ```sh
-./install.sh            # build, install, enable the hermesd user service
-hermes pair             # link: scan the QR code with WhatsApp → Linked devices
-hermes-ui               # open the window
+git clone https://github.com/AaditPani-RVU/hermes.git
+cd hermes
+./install.sh          # builds the daemon and CLI, installs the UI, enables the hermesd user service
+hermes pair           # shows a QR code: WhatsApp on your phone → Linked devices → Link a device
+hermes-ui             # opens the window (niri users get Mod+Ctrl+W)
 ```
 
-Optional: `qt6-image-formats-plugins` for native animated WebP stickers.
+Optional: install `qt6-image-formats-plugins` for native animated WebP stickers.
 
-## Layout
+Hermes picks up colours from Clavis Shell's matugen output if it's there, and falls back to a built-in dark
+theme otherwise.
 
-| Path | What |
+## CLI
+
+```text
+hermes inbox                      what needs you, grouped like the app
+hermes done "Maya"                clear a chat from the inbox
+hermes send "Dad" "on my way"     send a message (chat = name, number or JID)
+hermes file "Maya" slides.pdf     send a file
+hermes search invoice             full-text search across every chat
+hermes schedule "Arjun" 18:30 "leaving now"
+hermes unread --json              counts for status bars
+hermes focus on 2h                only VIPs can notify you for two hours
+hermes updates                    check WhatsApp / library update status
+```
+
+## Project layout
+
+| Path | What's in it |
 |---|---|
-| `daemon/` | `hermesd` daemon and `hermes` CLI (Go) |
-| `ui/` | Quickshell UI (`Services/`, `Components/`, `Views/`) |
-| `clavis-module/` | Bar widget for Clavis Shell |
-| `packaging/` | systemd unit, launcher, updater, desktop entry, niri keybind |
-| `PLAN.md` | Design notes, feature matrix, roadmap and progress log |
+| [`daemon/`](daemon) | `hermesd` and the `hermes` CLI in Go: WhatsApp connection, storage, RPC, notifications, scheduler |
+| [`ui/`](ui) | The Quickshell app: `Services/` (daemon connection, theme), `Components/`, `Views/` |
+| [`clavis-module/`](clavis-module) | Status-bar widget for Clavis Shell |
+| [`packaging/`](packaging) | systemd unit, launcher, updater, desktop entry, niri keybind |
+| [`PLAN.md`](PLAN.md) | Design notes, feature matrix, roadmap and a dated progress log |
 
-Your data (session keys, messages, media) lives in `~/.local/share/hermes` and is never part of this repository.
+## Roadmap
+
+- [x] Full messaging and media, sync with phone, search, scheduling, focus mode
+- [x] Triage inbox with done, snooze and remind-me
+- [ ] A denser, transcript-style conversation view to match the inbox
+- [ ] Voice-note transcription that runs locally (whisper.cpp)
+- [ ] Private per-chat notes, text snippets, replying from notifications
+- [ ] Status (stories), channels, group admin, privacy settings
+
+## Credits
+
+Hermes stands on [whatsmeow](https://github.com/tulir/whatsmeow) by Tulir Asokan, which does the protocol and
+encryption work, and on [Quickshell](https://quickshell.outfoxxed.me/) for the UI. Icons are
+[Material Symbols](https://fonts.google.com/icons).
