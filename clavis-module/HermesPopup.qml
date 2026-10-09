@@ -130,10 +130,12 @@ PanelWindow {
             width: implicitWidth
             implicitWidth: 360
             implicitHeight: column.implicitHeight + 16
-            color: BlurService.backgroundColor(Appearance.colors.colLayer0)
+            // Solid wallpaper-derived surface: this layer isn't blurred, so Clavis' translucent
+            // glass would let text from the windows underneath show through.
+            color: Appearance.m3colors.m3surfaceContainer
             radius: 18
             border.width: 1
-            border.color: Appearance.colors.colLayer0Border
+            border.color: Appearance.m3colors.m3outlineVariant
             clip: true
 
             // Swallow clicks on the card's empty space so they don't close it.
@@ -277,7 +279,7 @@ PanelWindow {
 
         implicitHeight: entryColumn.implicitHeight + 12
         radius: 14
-        color: entry.replying ? Appearance.colors.colLayer2 : rowMouse.containsMouse ? Appearance.colors.colLayer0Hover :
+        color: entry.replying ? Appearance.m3colors.m3surfaceContainerHigh : rowMouse.containsMouse ? Appearance.colors.colLayer0Hover :
                                                                                        "transparent"
 
         ColumnLayout {
@@ -439,9 +441,9 @@ PanelWindow {
                 visible: entry.replying
                 implicitHeight: Math.max(36, input.implicitHeight + 16)
                 radius: 18
-                color: Appearance.colors.colLayer0
+                color: Appearance.m3colors.m3surfaceContainerLow
                 border.width: 1
-                border.color: input.activeFocus ? Appearance.colors.colPrimary : Appearance.colors.colLayer0Border
+                border.color: input.activeFocus ? Appearance.colors.colPrimary : Appearance.m3colors.m3outlineVariant
 
                 TextInput {
                     id: input
