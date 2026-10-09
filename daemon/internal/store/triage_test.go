@@ -87,3 +87,30 @@ func TestTriageColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNotesAndSnippets(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	chat := "5@s.whatsapp.net"
+	_ = s.EnsureChat(ctx, chat, false)
+	if err := s.SetChatField(ctx, chat, "note", "birthday 12 March"); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := s.GetChat(ctx, chat); c.Note != "birthday 12 March" {
+		t.Fatalf("note = %q", c.Note)
+	}
+	if err := s.SetSnippet(ctx, ";Addr", "221B Baker Street"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetSnippet(ctx, "two words", "x"); err == nil {
+		t.Fatal("expected an error for a name with a space")
+	}
+	list, _ := s.Snippets(ctx)
+	if len(list) != 1 || list[0].Trigger != "addr" {
+		t.Fatalf("snippets = %+v", list)
+	}
+	_ = s.SetSnippet(ctx, "addr", "")
+	if list, _ := s.Snippets(ctx); len(list) != 0 {
+		t.Fatalf("delete failed: %+v", list)
+	}
+}

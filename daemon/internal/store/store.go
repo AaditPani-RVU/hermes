@@ -37,6 +37,7 @@ type Chat struct {
 	SnoozeNote   string `json:"snoozeNote"` // preview of SnoozeMsg, for "remind me about this"
 	MentionTS    int64  `json:"mentionTs"`
 	RepliedTS    int64  `json:"repliedTs"`
+	Note         string `json:"note"`   // private, never sent
 	Bucket       string `json:"bucket"` // triage: reply mention fyi waiting snoozed done
 }
 
@@ -171,6 +172,8 @@ var chatMigrations = []string{
 	`ALTER TABLE hermes_chats ADD COLUMN snooze_msg TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE hermes_chats ADD COLUMN mention_ts INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE hermes_chats ADD COLUMN replied_ts INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE hermes_chats ADD COLUMN note TEXT NOT NULL DEFAULT ''`,
+	`CREATE TABLE IF NOT EXISTS hermes_snippets (name TEXT PRIMARY KEY, text TEXT NOT NULL)`,
 }
 
 func Open(ctx context.Context, db *sql.DB) (*Store, error) {
@@ -202,13 +205,13 @@ func b2i(b bool) int {
 }
 
 const chatCols = `jid, name, is_group, last_ts, last_msg_id, unread, marked_unread, archived, pinned_ts, muted_until, ephemeral, avatar_path, avatar_id, draft,
-	done_ts, snooze_until, snooze_msg, mention_ts, replied_ts`
+	done_ts, snooze_until, snooze_msg, mention_ts, replied_ts, note`
 
 func scanChat(row interface{ Scan(...any) error }) (*Chat, error) {
 	var c Chat
 	err := row.Scan(&c.JID, &c.Name, &c.IsGroup, &c.LastTS, &c.LastMsgID, &c.Unread, &c.MarkedUnread,
 		&c.Archived, &c.PinnedTS, &c.MutedUntil, &c.Ephemeral, &c.AvatarPath, &c.AvatarID, &c.Draft,
-		&c.DoneTS, &c.SnoozeUntil, &c.SnoozeMsg, &c.MentionTS, &c.RepliedTS)
+		&c.DoneTS, &c.SnoozeUntil, &c.SnoozeMsg, &c.MentionTS, &c.RepliedTS, &c.Note)
 	return &c, err
 }
 
@@ -434,7 +437,7 @@ func (s *Store) SetChatAvatar(ctx context.Context, jid, path, id string) error {
 func (s *Store) SetChatField(ctx context.Context, jid, field string, value any) error {
 	switch field {
 	case "archived", "pinned_ts", "muted_until", "unread", "marked_unread", "ephemeral", "draft",
-		"done_ts", "snooze_until", "snooze_msg":
+		"done_ts", "snooze_until", "snooze_msg", "note":
 	default:
 		return fmt.Errorf("unknown chat field %q", field)
 	}
@@ -748,6 +751,45 @@ func (s *Store) DueSnoozes(ctx context.Context, now int64) ([]*Chat, error) {
 		s.fillPreview(ctx, c)
 	}
 	return out, nil
+}
+
+// ---- Snippets: text you expand with ;trigger in the composer ----
+
+type Snippet struct {
+	Trigger string `json:"trigger"`
+	Text    string `json:"text"`
+}
+
+func (s *Store) Snippets(ctx context.Context) ([]Snippet, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT name, text FROM hermes_snippets ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Snippet{}
+	for rows.Next() {
+		var sn Snippet
+		if err := rows.Scan(&sn.Trigger, &sn.Text); err != nil {
+			return nil, err
+		}
+		out = append(out, sn)
+	}
+	return out, rows.Err()
+}
+
+// SetSnippet creates or replaces a snippet; an empty text deletes it.
+func (s *Store) SetSnippet(ctx context.Context, trigger, text string) error {
+	trigger = strings.ToLower(strings.TrimLeft(strings.TrimSpace(trigger), ";"))
+	if trigger == "" || strings.ContainsAny(trigger, " \t\n;") {
+		return errors.New("a snippet name is one word, like addr")
+	}
+	if strings.TrimSpace(text) == "" {
+		_, err := s.DB.ExecContext(ctx, `DELETE FROM hermes_snippets WHERE name=?`, trigger)
+		return err
+	}
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO hermes_snippets (name, text) VALUES (?, ?)
+		ON CONFLICT(name) DO UPDATE SET text=excluded.text`, trigger, text)
+	return err
 }
 
 // UnreadChats lists chats with unread messages.

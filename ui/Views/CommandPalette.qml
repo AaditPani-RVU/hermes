@@ -21,6 +21,7 @@ Popup {
     readonly property var actions: [
         { kind: "action", key: "inbox", name: "Go to inbox", icon: "inbox" },
         { kind: "action", key: "new", name: "New chat", icon: "edit_square" },
+        { kind: "action", key: "snippets", name: "Manage snippets", icon: "text_snippet" },
         { kind: "action", key: "search", name: "Search messages", icon: "manage_search" },
         { kind: "action", key: "focus", name: "Toggle focus mode", icon: "do_not_disturb_on" },
         { kind: "action", key: "archived", name: "Show archived chats", icon: "archive" },

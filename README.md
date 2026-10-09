@@ -68,6 +68,17 @@ in whatever language they're in. Nothing is uploaded anywhere. The transcript ap
 preview, in notifications, and in search, so you can find "that voice note about the flat" weeks later.
 Older voice notes can be transcribed from the message menu.
 
+### Notes and snippets
+
+Every chat can have a **private note**, a strip under the header for context like "manager, prefers short updates"
+or a birthday. It's stored only in Hermes and never sent. Chats with a note show a small icon in the inbox.
+
+**Snippets** are text you reuse. Type `;` in a message and pick one, or type `;addr` and a space to expand it.
+`{first}`, `{date}` and `{time}` are filled in for the chat you're in. Manage them from `Ctrl+K` → *Manage snippets*.
+Nothing is sent until you press Enter.
+
+<img src="docs/notes-snippets.png" alt="A private note under the chat header and the snippet picker above the message box" width="100%">
+
 ### Snooze and remind me
 
 Pick a preset with a number key, or just start typing a time: `in 2h`, `tonight`, `tmr 14:00`, `fri 9am`, `18:30`.
@@ -187,6 +198,8 @@ hermes send "Dad" "on my way"     send a message (chat = name, number or JID)
 hermes file "Maya" slides.pdf     send a file
 hermes search invoice             full-text search across every chat
 hermes schedule "Arjun" 18:30 "leaving now"
+hermes note "Maya" "prefers short updates"   private note on a chat
+hermes snippet addr "Flat 4B, Lakeview Apartments"   then type ;addr in the app
 hermes unread --json              counts for status bars
 hermes focus on 2h                only VIPs can notify you for two hours
 hermes updates                    check WhatsApp / library update status
@@ -208,7 +221,8 @@ hermes updates                    check WhatsApp / library update status
 - [x] Triage inbox with done, snooze and remind-me
 - [x] Transcript-style conversation view, typed snooze times, message reminders
 - [x] Voice-note transcription that runs locally (whisper.cpp)
-- [ ] Private per-chat notes, text snippets, replying from notifications
+- [x] Private per-chat notes and text snippets
+- [ ] Replying straight from notifications
 - [ ] Status (stories), channels, group admin, privacy settings
 
 ## Credits

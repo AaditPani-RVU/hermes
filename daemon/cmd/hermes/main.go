@@ -23,6 +23,9 @@ Usage:
   hermes inbox [--json]               triage inbox: needs reply, mentions, FYI, waiting
   hermes done <chat>                  clear a chat from the inbox
   hermes chats [--archived]           list chats
+  hermes note <chat> [text...]        show or set a chat's private note ("-" clears it)
+  hermes snippets                     list snippets (type ;name in the app to expand)
+  hermes snippet <name> [text...]     add/replace a snippet, or delete it with no text
   hermes unread [--json]              unread counts (for status bars)
   hermes read <chat>                  show recent messages in a chat
   hermes send <chat> <text...>        send a message (chat = name, number or JID)
@@ -108,6 +111,7 @@ type chat struct {
 	PinnedTS    int64  `json:"pinnedTs"`
 	Bucket      string `json:"bucket"`
 	SnoozeUntil int64  `json:"snoozeUntil"`
+	Note        string `json:"note"`
 }
 
 type status struct {
@@ -324,6 +328,58 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Println("Done:", name)
+	case "note":
+		if len(rest) < 1 {
+			return errors.New("usage: hermes note <chat> [text...]")
+		}
+		jid, name, err := c.resolveChat(rest[0])
+		if err != nil {
+			return err
+		}
+		if len(rest) == 1 {
+			var ch chat
+			if err := c.call("chats.get", map[string]string{"chat": jid}, &ch); err != nil {
+				return err
+			}
+			if ch.Note == "" {
+				fmt.Printf("No note on %s\n", name)
+			} else {
+				fmt.Println(ch.Note)
+			}
+			return nil
+		}
+		text := strings.Join(rest[1:], " ")
+		if text == "-" {
+			text = ""
+		}
+		if err := c.call("chats.setNote", map[string]string{"chat": jid, "text": text}, nil); err != nil {
+			return err
+		}
+		fmt.Println("Saved note on", name)
+	case "snippets":
+		var list []struct{ Trigger, Text string }
+		if err := c.call("snippets.list", nil, &list); err != nil {
+			return err
+		}
+		if len(list) == 0 {
+			fmt.Println("No snippets yet. Add one: hermes snippet addr \"221B Baker Street\"")
+		}
+		for _, sn := range list {
+			fmt.Printf(";%-12s %s\n", sn.Trigger, strings.ReplaceAll(sn.Text, "\n", " ⏎ "))
+		}
+	case "snippet":
+		if len(rest) < 1 {
+			return errors.New("usage: hermes snippet <name> [text...]")
+		}
+		text := strings.Join(rest[1:], " ")
+		if err := c.call("snippets.set", map[string]string{"trigger": rest[0], "text": text}, nil); err != nil {
+			return err
+		}
+		if text == "" {
+			fmt.Println("Deleted ;" + strings.TrimLeft(rest[0], ";"))
+		} else {
+			fmt.Println("Saved ;" + strings.TrimLeft(rest[0], ";"))
+		}
 	case "unread":
 		var u map[string]int
 		if err := c.call("chats.unread", nil, &u); err != nil {

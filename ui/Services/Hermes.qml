@@ -38,6 +38,8 @@ Singleton {
     signal openChatRequested(string jid)
     signal incomingCall(string name, bool video)
     signal messagesLoaded
+    signal manageSnippetsRequested
+    property var snippets: [] // [{trigger, text}]
     property string jumpTo: "" // message to scroll to once the open chat loads (reminders)
 
     readonly property ListModel chats: ListModel {}
@@ -147,6 +149,7 @@ Singleton {
         });
         reloadChats();
         refreshScheduled();
+        refreshSnippets();
         if (currentChat)
             loadMessages(currentChat);
     }
@@ -175,7 +178,8 @@ Singleton {
             doneTs: c.doneTs || 0,
             snoozeUntil: c.snoozeUntil || 0,
             snoozeMsg: c.snoozeMsg || "",
-            snoozeNote: c.snoozeNote || ""
+            snoozeNote: c.snoozeNote || "",
+            note: c.note || ""
         };
     }
 
@@ -564,6 +568,25 @@ Singleton {
         if (currentChat)
             call("presence.typing", { chat: currentChat, composing: composing });
     }
+    function refreshSnippets() {
+        call("snippets.list", {}, res => {
+            if (res)
+                root.snippets = res;
+        });
+    }
+
+    // Fill a snippet's placeholders for the open chat: {first} {name} {date} {time}
+    function expandSnippet(text) {
+        const name = currentInfo && !currentInfo.isGroup ? currentInfo.name.replace(/^~ /, "") : "";
+        const d = new Date();
+        // In groups there's no single name: drop the placeholder and the space before it ("Hey {first}," → "Hey,").
+        const first = name.split(" ")[0] || "";
+        return text.replace(first ? /\{first\}/g : / ?\{first\}/g, first)
+            .replace(name ? /\{name\}/g : / ?\{name\}/g, name)
+            .replace(/\{date\}/g, d.toLocaleDateString(Qt.locale(), "d MMMM yyyy"))
+            .replace(/\{time\}/g, F.clock(d / 1000));
+    }
+
     function refreshScheduled() {
         call("schedule.list", {}, res => {
             if (res)
@@ -688,6 +711,9 @@ Singleton {
             break;
         case "recording":
             recording = data.active;
+            break;
+        case "snippets.changed":
+            refreshSnippets();
             break;
         case "scheduled":
         case "scheduled.changed":

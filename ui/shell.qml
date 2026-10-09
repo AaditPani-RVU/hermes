@@ -368,6 +368,7 @@ ShellRoot {
                 case "focus": Hermes.act("focus.set", { until: Hermes.focusState.active ? 0 : -1 }, Hermes.focusState.active ? "Focus mode off" : "Focus mode on"); break;
                 case "archived": rail.section = "chats"; Hermes.showArchived = true; break;
                 case "inbox": rail.section = "inbox"; inboxPane.focusList(); break;
+                case "snippets": snippetsSheet.open(); break;
                 case "scheduled": rail.section = "scheduled"; break;
                 case "starred": rail.section = "starred"; break;
                 case "markall": Hermes.act("chats.markAllRead", {}, "All chats marked as read"); break;
@@ -376,6 +377,9 @@ ShellRoot {
         }
         NewChatSheet {
             id: newChat
+        }
+        SnippetsSheet {
+            id: snippetsSheet
         }
         SnoozePicker {
             id: snoozePicker
@@ -407,6 +411,9 @@ ShellRoot {
             if (jid)
                 Hermes.openChat(jid);
             win.visible = true;
+        }
+        function onManageSnippetsRequested() {
+            snippetsSheet.open();
         }
         function onIncomingCall(name, video) {
             callBanner.who = name;

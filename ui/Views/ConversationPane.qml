@@ -11,6 +11,8 @@ Rectangle {
     id: pane
     color: Theme.surface
     property bool infoOpen: false
+    property bool noteEditing: false
+    readonly property string note: info ? (info.note || "") : ""
     signal searchInChat
     signal snoozeRequested(string msgId)
 
@@ -138,6 +140,20 @@ Rectangle {
                 }
             }
             IconButton {
+                icon: "sticky_note_2"
+                filled: pane.note !== ""
+                toggled: noteBar.visible
+                tip: "Private note: only you can see it"
+                onClicked: {
+                    if (noteBar.visible && pane.note === "")
+                        pane.noteEditing = false;
+                    else {
+                        pane.noteEditing = true;
+                        noteInput.forceActiveFocus();
+                    }
+                }
+            }
+            IconButton {
                 icon: "snooze"
                 tip: "Snooze (Ctrl+S)"
                 onClicked: pane.snoozeRequested("")
@@ -176,10 +192,107 @@ Rectangle {
         }
     }
 
+    // ---- private note (local only, never sent) ----
+    Rectangle {
+        id: noteBar
+        anchors.top: header.bottom
+        anchors.left: parent.left
+        anchors.right: infoPanel.left
+        visible: pane.note !== "" || pane.noteEditing
+        height: visible ? Math.min(160, noteInput.contentHeight + 22) : 0
+        color: Theme.alpha(Theme.tertiaryContainer, 0.55)
+        z: 1
+
+        Icon {
+            id: noteIcon
+            x: 22
+            y: 11
+            name: "sticky_note_2"
+            filled: true
+            size: 18
+            color: Theme.fgTertiaryContainer
+        }
+        Flickable {
+            id: noteFlick
+            anchors.left: noteIcon.right
+            anchors.leftMargin: 10
+            anchors.right: noteHint.left
+            anchors.rightMargin: 10
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.topMargin: 9
+            contentHeight: noteInput.contentHeight
+            clip: true
+            TextEdit {
+                id: noteInput
+                width: noteFlick.width
+                wrapMode: TextEdit.Wrap
+                color: Theme.fgTertiaryContainer
+                selectionColor: Theme.tertiary
+                selectedTextColor: Theme.fgTertiary
+                font.family: Theme.font
+                font.pixelSize: 14
+                Text {
+                    visible: noteInput.text === ""
+                    text: "Private note for this chat: context, birthdays, what you owe them…"
+                    color: Theme.alpha(Theme.fgTertiaryContainer, 0.6)
+                    font: noteInput.font
+                }
+                // Load the chat's note, but never overwrite what you're typing.
+                Connections {
+                    target: Hermes
+                    function onCurrentChatChanged() {
+                        pane.noteEditing = false;
+                        noteInput.text = pane.note;
+                    }
+                }
+                Connections {
+                    target: pane
+                    function onNoteChanged() {
+                        if (!noteInput.activeFocus)
+                            noteInput.text = pane.note;
+                    }
+                }
+                Component.onCompleted: text = pane.note
+                onTextChanged: if (activeFocus) noteSave.restart()
+                onActiveFocusChanged: {
+                    if (!activeFocus) {
+                        if (noteSave.running) { noteSave.stop(); noteSave.triggered(); }
+                        if (text.trim() === "") pane.noteEditing = false;
+                    }
+                }
+                Keys.onPressed: e => {
+                    if (e.key === Qt.Key_Escape) {
+                        pane.focusComposer();
+                        e.accepted = true;
+                    }
+                }
+            }
+        }
+        Text {
+            id: noteHint
+            anchors.right: parent.right
+            anchors.rightMargin: 18
+            y: 12
+            text: noteSave.running ? "saving…" : "only you see this"
+            color: Theme.alpha(Theme.fgTertiaryContainer, 0.6)
+            font.family: Theme.font
+            font.pixelSize: 11
+        }
+        Timer {
+            id: noteSave
+            interval: 600
+            onTriggered: {
+                if (Hermes.currentChat && noteInput.text !== pane.note)
+                    Hermes.call("chats.setNote", { chat: Hermes.currentChat, text: noteInput.text });
+            }
+        }
+    }
+
     // ---- messages ----
     Rectangle {
         id: wall
-        anchors.top: header.bottom
+        anchors.top: noteBar.bottom
         anchors.bottom: composer.top
         anchors.left: parent.left
         anchors.right: infoPanel.left

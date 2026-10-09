@@ -25,6 +25,7 @@ Item {
     required property string draft
     required property real snoozeUntil
     required property string snoozeNote
+    required property string note
 
     property bool cursor: false // keyboard selection
     readonly property bool header: kind === "header"
@@ -151,13 +152,23 @@ Item {
                 width: parent.width
                 spacing: 6
                 Text {
-                    width: Math.min(implicitWidth, parent.width - (atIcon.visible ? 22 : 0))
+                    width: Math.min(implicitWidth, parent.width - (atIcon.visible ? 22 : 0) - (row.note !== "" ? 20 : 0))
                     text: row.name
                     elide: Text.ElideRight
                     color: row.selected ? Theme.fgSecondaryContainer : Theme.fgSurface
                     font.family: Theme.font
                     font.pixelSize: 15
                     font.weight: row.quiet ? Font.Medium : Font.DemiBold
+                }
+                Icon {
+                    visible: row.note !== ""
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "sticky_note_2"
+                    filled: true
+                    size: 14
+                    color: Theme.fgSurfaceVariant
+                    HoverHandler { id: noteHover }
+                    Tip { shown: noteHover.hovered; text: row.note.length > 80 ? row.note.slice(0, 80) + "…" : row.note }
                 }
                 Icon {
                     id: atIcon

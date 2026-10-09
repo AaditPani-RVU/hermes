@@ -308,6 +308,15 @@ the home view groups chats by what they need from you, and chats are cleared, no
   to `raw`. **Untested end to end:** the first tries got no reply from the phone (probably asleep); retest with WhatsApp open on it.
 - UI: transcript under the voice player (quoted), "Transcribing…" / "Couldn't transcribe · Retry", Transcribe in the message menu.
 
+### 2026-10-09: Phase B (2) chat notes and snippets
+- **Notes:** `hermes_chats.note` (migration), `chats.setNote`, `chat.note`. UI: tertiary strip under the conversation header,
+  edited in place, autosaved after 600 ms (never overwritten while focused), toggle via the header note button;
+  note icon with tooltip in inbox rows. CLI `hermes note <chat> [text|-]`.
+- **Snippets:** `hermes_snippets(name, text)`, `snippets.list/set` (empty text deletes; names are one lowercase word),
+  `snippets.changed` event. Composer: `;query` before the cursor opens a picker (↑/↓, Tab/Enter inserts, Esc dismisses,
+  `;name␣` expands an exact match). Placeholders `{first}` `{name}` `{date}` `{time}`; in groups `{first}` drops out with its space.
+  `SnippetsSheet` from Ctrl+K or the picker. CLI `hermes snippets`, `hermes snippet <name> [text]`.
+
 **Not done yet / next:**
 - [x] First real pairing (2026-10-09): QR link works
 - [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)

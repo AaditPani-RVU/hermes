@@ -295,6 +295,25 @@ func registerMethods(srv *rpc.Server, core *wa.Core, st *hs.Store, openUI func(s
 		}
 		return nil, st.SetKV(ctx, "transcribe", v)
 	})
+	h("chats.setNote", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Chat, Text string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetNote(ctx, p.Chat, p.Text)
+	})
+	h("snippets.list", func(ctx context.Context, _ json.RawMessage) (any, error) { return st.Snippets(ctx) })
+	h("snippets.set", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Trigger, Text string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		if err := st.SetSnippet(ctx, p.Trigger, p.Text); err != nil {
+			return nil, err
+		}
+		srv.Broadcast("snippets.changed", nil)
+		return nil, nil
+	})
 	h("chats.unread", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		c, m, err := st.TotalUnread(ctx)
 		return map[string]int{"chats": c, "messages": m}, err

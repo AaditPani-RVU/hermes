@@ -270,6 +270,16 @@ func (c *Core) Snooze(ctx context.Context, chat string, until int64, msgID strin
 	return nil
 }
 
+// SetNote saves the chat's private note (local only; WhatsApp never sees it).
+func (c *Core) SetNote(ctx context.Context, chat, text string) error {
+	_ = c.Store.EnsureChat(ctx, chat, strings.HasSuffix(chat, "@g.us"))
+	if err := c.Store.SetChatField(ctx, chat, "note", strings.TrimRight(text, " \n")); err != nil {
+		return err
+	}
+	c.emitChat(ctx, chat)
+	return nil
+}
+
 func (c *Core) SetDraft(ctx context.Context, chat, text string) error {
 	_ = c.Store.EnsureChat(ctx, chat, strings.HasSuffix(chat, "@g.us"))
 	return c.Store.SetChatField(ctx, chat, "draft", text)

@@ -38,6 +38,39 @@ Rectangle {
         replyTo = null;
         editing = null;
     }
+    // ---- snippets: ";name" before the cursor opens a picker ----
+    property string snipQuery: ""
+    property int snipIndex: 0
+    property bool snipDismissed: false
+    readonly property var snipMatches: {
+        if (snipQuery === null || snipDismissed)
+            return [];
+        const q = snipQuery.toLowerCase();
+        return Hermes.snippets.filter(s => s.trigger.startsWith(q)).slice(0, 6);
+    }
+    readonly property bool snipOpen: snipActive && !snipDismissed && (snipMatches.length > 0 || Hermes.snippets.length === 0)
+    property bool snipActive: false
+
+    function updateSnippetQuery() {
+        const before = input.text.slice(0, input.cursorPosition);
+        const m = before.match(/(^|\s);([\w-]*)$/);
+        snipActive = !!m && !root.editing;
+        const q = m ? m[2] : "";
+        if (q !== snipQuery || !m)
+            snipIndex = 0;
+        if (!m)
+            snipDismissed = false;
+        snipQuery = q;
+    }
+    function applySnippet(sn) {
+        const pos = input.cursorPosition;
+        const start = pos - snipQuery.length - 1; // include the ";"
+        const text = Hermes.expandSnippet(sn.text);
+        input.remove(start, pos);
+        input.insert(start, text);
+        snipActive = false;
+    }
+
     function insertText(t) {
         input.insert(input.cursorPosition, t);
         focusInput();
@@ -297,6 +330,34 @@ Rectangle {
                         bottomPadding: 9
                         leftPadding: 4
                         Keys.onPressed: e => {
+                            if (root.snipOpen && root.snipMatches.length > 0) {
+                                if (e.key === Qt.Key_Down || e.key === Qt.Key_Up) {
+                                    const n = root.snipMatches.length;
+                                    root.snipIndex = (root.snipIndex + (e.key === Qt.Key_Down ? 1 : n - 1)) % n;
+                                    e.accepted = true;
+                                    return;
+                                }
+                                if (e.key === Qt.Key_Tab || ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && !(e.modifiers & Qt.ShiftModifier))) {
+                                    root.applySnippet(root.snipMatches[root.snipIndex]);
+                                    e.accepted = true;
+                                    return;
+                                }
+                                if (e.key === Qt.Key_Space) {
+                                    // ";addr " expands on an exact match, like a text-expander
+                                    const exact = root.snipMatches.find(s => s.trigger === root.snipQuery.toLowerCase());
+                                    if (exact) {
+                                        root.applySnippet(exact);
+                                        input.insert(input.cursorPosition, " ");
+                                        e.accepted = true;
+                                        return;
+                                    }
+                                }
+                            }
+                            if (e.key === Qt.Key_Escape && root.snipOpen) {
+                                root.snipDismissed = true;
+                                e.accepted = true;
+                                return;
+                            }
                             if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && !(e.modifiers & Qt.ShiftModifier)) {
                                 e.accepted = true;
                                 if (e.modifiers & Qt.ControlModifier)
@@ -318,7 +379,9 @@ Rectangle {
                                 }
                             }
                         }
+                        onCursorPositionChanged: root.updateSnippetQuery()
                         onTextChanged: {
+                            root.updateSnippetQuery();
                             if (text === "" || root.editing)
                                 return;
                             const now = Date.now();
@@ -332,6 +395,86 @@ Rectangle {
                 }
             }
 
+        }
+    }
+
+    // Snippet picker, floating above the composer
+    Rectangle {
+        id: snipPicker
+        visible: root.snipOpen
+        z: 20
+        x: 16
+        anchors.bottom: parent.top
+        anchors.bottomMargin: 6
+        width: Math.min(460, root.width - 32)
+        height: snipCol.implicitHeight + 12
+        radius: Theme.radiusMd
+        color: Theme.surfaceContainerHigh
+        border.width: 1
+        border.color: Theme.alpha(Theme.outlineVariant, 0.6)
+        Column {
+            id: snipCol
+            x: 6
+            y: 6
+            width: parent.width - 12
+            Repeater {
+                model: root.snipMatches
+                Rectangle {
+                    required property var modelData
+                    required property int index
+                    width: snipCol.width
+                    height: 46
+                    radius: Theme.radiusSm
+                    color: index === root.snipIndex ? Theme.secondaryContainer : "transparent"
+                    Text {
+                        id: trig
+                        x: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: ";" + modelData.trigger
+                        color: Theme.primary
+                        font.family: Theme.monoFont
+                        font.pixelSize: 13
+                        width: 96
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        anchors.left: trig.right
+                        anchors.leftMargin: 10
+                        anchors.right: parent.right
+                        anchors.rightMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Hermes.expandSnippet(modelData.text).replace(/\n/g, " ⏎ ")
+                        elide: Text.ElideRight
+                        color: index === root.snipIndex ? Theme.fgSecondaryContainer : Theme.fgSurface
+                        font.family: Theme.font
+                        font.pixelSize: 13
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+                        onEntered: root.snipIndex = index
+                        onClicked: { root.applySnippet(modelData); root.focusInput(); }
+                    }
+                }
+            }
+            Item {
+                width: snipCol.width
+                height: 30
+                Text {
+                    x: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.StyledText
+                    text: Hermes.snippets.length === 0
+                        ? "No snippets yet · <a href='m'>Create one</a>"
+                        : "Tab to insert · Esc to dismiss · <a href='m'>Manage snippets</a>"
+                    linkColor: Theme.primary
+                    color: Theme.fgSurfaceVariant
+                    font.family: Theme.font
+                    font.pixelSize: 11
+                    onLinkActivated: Hermes.manageSnippetsRequested()
+                }
+            }
         }
     }
 
