@@ -381,6 +381,81 @@ func registerMethods(srv *rpc.Server, core *wa.Core, st *hs.Store, openUI func(s
 		}
 		return nil, st.SetKV(ctx, "status_receipts", v)
 	})
+	// Groups, disappearing messages, blocking
+	h("groups.members", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat    string
+			Members []string
+			Action  string
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.UpdateMembers(ctx, p.Chat, p.Members, p.Action)
+	})
+	h("groups.setName", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Chat, Name string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetGroupName(ctx, p.Chat, p.Name)
+	})
+	h("groups.setTopic", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Chat, Topic string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetGroupTopic(ctx, p.Chat, p.Topic)
+	})
+	h("groups.setFlags", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat     string
+			Announce *bool
+			Locked   *bool
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetGroupFlags(ctx, p.Chat, p.Announce, p.Locked)
+	})
+	h("groups.inviteLink", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat  string
+			Reset bool
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.InviteLink(ctx, p.Chat, p.Reset)
+	})
+	h("groups.leave", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[chatParam](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.LeaveGroup(ctx, p.Chat)
+	})
+	h("chats.setDisappearing", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat    string
+			Seconds int64
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetDisappearing(ctx, p.Chat, p.Seconds)
+	})
+	h("blocklist.get", func(ctx context.Context, _ json.RawMessage) (any, error) { return core.Blocklist(ctx) })
+	h("blocklist.set", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Chat  string
+			Block bool
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetBlocked(ctx, p.Chat, p.Block)
+	})
 	h("chats.unread", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		c, m, err := st.TotalUnread(ctx)
 		return map[string]int{"chats": c, "messages": m}, err

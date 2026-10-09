@@ -1,23 +1,46 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
+import Quickshell
 import qs.Services
 import qs.Components
 
-// Slide-in chat details panel.
+// Slide-in chat details: quick actions, disappearing messages, and for groups the
+// description, members and admin tools; block/leave at the bottom.
 Rectangle {
     id: panel
     color: Theme.surfaceContainerLow
     signal closeRequested
     property var group: null
+    property bool blocked: false
     readonly property var info: Hermes.currentInfo
+    readonly property bool isGroup: !!info && info.isGroup
+    readonly property bool admin: !!group && group.iAmAdmin
+    readonly property bool canEditInfo: !!group && group.iAmMember && (admin || !group.locked)
 
     function reload() {
         group = null;
-        if (info && info.isGroup && visible)
-            Hermes.call("chats.groupInfo", { chat: info.jid }, (res, err) => {
+        blocked = false;
+        if (!info || !visible)
+            return;
+        const jid = info.jid;
+        if (info.isGroup)
+            Hermes.call("chats.groupInfo", { chat: jid }, (res, err) => {
                 if (!err && res && Hermes.currentChat === res.jid)
                     panel.group = res;
             });
+        else
+            Hermes.call("blocklist.get", {}, (res, err) => {
+                if (!err && res && Hermes.currentChat === jid)
+                    panel.blocked = res.some(b => b.jid === jid);
+            });
+    }
+    // Run a group action, then refresh the member list.
+    function groupAct(method, params, okText) {
+        Hermes.act(method, Object.assign({ chat: panel.info.jid }, params), okText, (res, err) => {
+            if (!err)
+                reload();
+        });
     }
     onVisibleChanged: if (visible) reload()
     Connections {
@@ -31,6 +54,68 @@ Rectangle {
         color: Theme.alpha(Theme.outlineVariant, 0.4)
     }
 
+    component SectionTitle: Text {
+        x: 20
+        color: Theme.primary
+        font.family: Theme.font
+        font.pixelSize: 13
+        font.weight: Font.DemiBold
+    }
+    component SettingRow: Item {
+        id: sr
+        property string icon: ""
+        property string label: ""
+        property string value: ""
+        property bool danger: false
+        signal clicked(var item)
+        width: parent ? parent.width : 320
+        height: 50
+        Rectangle {
+            anchors.fill: parent
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            radius: Theme.radiusSm
+            color: srm.containsMouse ? Theme.alpha(sr.danger ? Theme.error : Theme.fgSurface, 0.06) : "transparent"
+        }
+        Icon {
+            id: sri
+            x: 20
+            anchors.verticalCenter: parent.verticalCenter
+            name: sr.icon
+            size: 20
+            color: sr.danger ? Theme.error : Theme.fgSurfaceVariant
+        }
+        Text {
+            anchors.left: sri.right
+            anchors.leftMargin: 14
+            anchors.right: srv.left
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            elide: Text.ElideRight
+            text: sr.label
+            color: sr.danger ? Theme.error : Theme.fgSurface
+            font.family: Theme.font
+            font.pixelSize: 14
+        }
+        Text {
+            id: srv
+            anchors.right: parent.right
+            anchors.rightMargin: 20
+            anchors.verticalCenter: parent.verticalCenter
+            text: sr.value
+            color: Theme.fgSurfaceVariant
+            font.family: Theme.font
+            font.pixelSize: 13
+        }
+        MouseArea {
+            id: srm
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: sr.clicked(sr)
+        }
+    }
+
     Flickable {
         anchors.fill: parent
         anchors.leftMargin: 1
@@ -41,7 +126,7 @@ Rectangle {
         Column {
             id: col
             width: parent.width
-            spacing: 14
+            spacing: 12
             topPadding: 12
 
             Item {
@@ -51,22 +136,34 @@ Rectangle {
             }
             Avatar {
                 anchors.horizontalCenter: parent.horizontalCenter
-                size: 120
+                size: 112
                 jid: panel.info ? panel.info.jid : ""
                 name: panel.info ? panel.info.name : ""
                 path: panel.info ? panel.info.avatarPath : ""
-                group: panel.info ? panel.info.isGroup : false
+                group: panel.isGroup
             }
-            Text {
-                width: parent.width - 32
+            Row {
                 anchors.horizontalCenter: parent.horizontalCenter
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                text: panel.info ? panel.info.name : ""
-                color: Theme.fgSurface
-                font.family: Theme.font
-                font.pixelSize: 22
-                font.weight: Font.DemiBold
+                spacing: 4
+                Text {
+                    width: Math.min(implicitWidth, col.width - 80)
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    text: panel.info ? panel.info.name : ""
+                    color: Theme.fgSurface
+                    font.family: Theme.font
+                    font.pixelSize: 22
+                    font.weight: Font.DemiBold
+                }
+                IconButton {
+                    visible: panel.canEditInfo
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: 30
+                    iconSize: 16
+                    icon: "edit"
+                    tip: "Rename group"
+                    onClicked: editSheet.edit("Group name", panel.info.name, false, t => panel.groupAct("groups.setName", { name: t }, "Renamed"))
+                }
             }
             Text {
                 width: parent.width - 32
@@ -77,9 +174,9 @@ Rectangle {
                 font.pixelSize: 14
                 text: {
                     if (!panel.info) return "";
-                    if (panel.info.isGroup)
-                        return panel.group ? (panel.group.isCommunity ? "Community · " : "Group · ") + panel.group.participants.length + " members" : "Loading…";
-                    return "+" + panel.info.jid.split("@")[0];
+                    if (panel.isGroup)
+                        return panel.group ? (panel.group.isCommunity ? "Community · " : "Group · ") + panel.group.participants.length + " members" + (panel.admin ? " · you're an admin" : "") : "Loading…";
+                    return "+" + panel.info.jid.split("@")[0] + (panel.blocked ? " · blocked" : "");
                 }
             }
 
@@ -126,7 +223,7 @@ Rectangle {
 
             // Group description
             Rectangle {
-                visible: !!(panel.group && panel.group.topic)
+                visible: panel.isGroup && !!panel.group && (panel.group.topic !== "" || panel.canEditInfo)
                 width: parent.width - 32
                 anchors.horizontalCenter: parent.horizontalCenter
                 height: visible ? topic.implicitHeight + 24 : 0
@@ -135,38 +232,137 @@ Rectangle {
                 Text {
                     id: topic
                     x: 12; y: 12
-                    width: parent.width - 24
+                    width: parent.width - (panel.canEditInfo ? 52 : 24)
                     wrapMode: Text.Wrap
-                    text: panel.group ? panel.group.topic : ""
-                    color: Theme.fgSurface
+                    text: panel.group ? (panel.group.topic || "Add a group description") : ""
+                    color: panel.group && panel.group.topic ? Theme.fgSurface : Theme.fgSurfaceVariant
                     font.family: Theme.font
                     font.pixelSize: 14
+                }
+                IconButton {
+                    visible: panel.canEditInfo
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4
+                    y: 4
+                    size: 30
+                    iconSize: 16
+                    icon: "edit"
+                    tip: "Edit description"
+                    onClicked: editSheet.edit("Group description", panel.group.topic, true, t => panel.groupAct("groups.setTopic", { topic: t }, "Description updated"))
+                }
+            }
+
+            // Chat settings
+            SettingRow {
+                icon: "timer"
+                label: "Disappearing messages"
+                value: !panel.info || !panel.info.ephemeral ? "Off" : panel.info.ephemeral >= 90 * 86400 ? "90 days" : panel.info.ephemeral >= 7 * 86400 ? "7 days" : "24 hours"
+                onClicked: item => dmMenu.openAt(item, item.width - dmMenu.width - 16, item.height)
+            }
+
+            // Group admin
+            Column {
+                visible: panel.admin
+                width: parent.width
+                spacing: 0
+                SectionTitle { text: "Group settings"; bottomPadding: 4 }
+                SettingRow {
+                    icon: "link"
+                    label: "Copy invite link"
+                    onClicked: Hermes.call("groups.inviteLink", { chat: panel.info.jid, reset: false }, (link, err) => {
+                        if (err) { Hermes.toast(err, true); return; }
+                        Quickshell.clipboardText = link;
+                        Hermes.toast("Invite link copied", false);
+                    })
+                }
+                SettingRow {
+                    icon: "link_off"
+                    label: "Reset invite link"
+                    onClicked: confirm.ask("Reset the invite link?", "The current link stops working for everyone who has it.", "Reset",
+                                           () => Hermes.call("groups.inviteLink", { chat: panel.info.jid, reset: true }, (link, err) => {
+                                               if (err) { Hermes.toast(err, true); return; }
+                                               Quickshell.clipboardText = link;
+                                               Hermes.toast("New invite link copied", false);
+                                           }))
+                }
+                Repeater {
+                    model: panel.group ? [
+                        { key: "announce", label: "Only admins can send messages", on: panel.group.announce },
+                        { key: "locked", label: "Only admins can edit group info", on: panel.group.locked }
+                    ] : []
+                    Item {
+                        required property var modelData
+                        width: col.width
+                        height: 50
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 20
+                            anchors.right: sw.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            wrapMode: Text.WordWrap
+                            text: modelData.label
+                            color: Theme.fgSurface
+                            font.family: Theme.font
+                            font.pixelSize: 14
+                        }
+                        Toggle {
+                            id: sw
+                            anchors.right: parent.right
+                            anchors.rightMargin: 20
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: modelData.on
+                            onToggled: {
+                                const p = {};
+                                p[modelData.key] = checked;
+                                panel.groupAct("groups.setFlags", p, "Group settings updated");
+                            }
+                        }
+                    }
                 }
             }
 
             // Members
-            Text {
+            Item {
                 visible: !!panel.group
-                x: 20
-                text: "Members"
-                color: Theme.primary
-                font.family: Theme.font
-                font.pixelSize: 14
-                font.weight: Font.DemiBold
+                width: parent.width
+                height: 34
+                SectionTitle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Members" + (panel.group ? " · " + panel.group.participants.length : "")
+                }
+                TextButton {
+                    visible: panel.admin
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitHeight: 32
+                    text: "Add"
+                    icon: "person_add"
+                    onClicked: addSheet.open()
+                }
             }
             Repeater {
                 model: panel.group ? panel.group.participants : []
                 Item {
+                    id: mrow
                     required property var modelData
                     width: col.width
                     height: 52
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        radius: Theme.radiusSm
+                        color: mma.containsMouse ? Theme.alpha(Theme.fgSurface, 0.05) : "transparent"
+                    }
                     Avatar {
                         id: pa
                         x: 20
                         anchors.verticalCenter: parent.verticalCenter
                         size: 38
-                        jid: modelData.jid
-                        name: modelData.name
+                        jid: ""
+                        name: mrow.modelData.name
                     }
                     Text {
                         anchors.left: pa.right
@@ -175,30 +371,288 @@ Rectangle {
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         elide: Text.ElideRight
-                        text: modelData.name
+                        text: mrow.modelData.isMe ? "You" : mrow.modelData.name
                         color: Theme.fgSurface
                         font.family: Theme.font
                         font.pixelSize: 14
                     }
                     Rectangle {
                         id: badge
-                        visible: modelData.isAdmin
-                        anchors.right: parent.right
-                        anchors.rightMargin: 20
+                        visible: mrow.modelData.isAdmin
+                        anchors.right: more.left
+                        anchors.rightMargin: 4
                         anchors.verticalCenter: parent.verticalCenter
                         width: visible ? at.implicitWidth + 14 : 0
                         height: 22
                         radius: 6
                         color: Theme.secondaryContainer
-                        Text { id: at; anchors.centerIn: parent; text: "Admin"; color: Theme.fgSecondaryContainer; font.family: Theme.font; font.pixelSize: 11 }
+                        Text { id: at; anchors.centerIn: parent; text: mrow.modelData.isSuper ? "Owner" : "Admin"; color: Theme.fgSecondaryContainer; font.family: Theme.font; font.pixelSize: 11 }
+                    }
+                    IconButton {
+                        id: more
+                        visible: panel.admin && !mrow.modelData.isMe
+                        anchors.right: parent.right
+                        anchors.rightMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: visible ? 32 : 6
+                        size: 32
+                        iconSize: 18
+                        icon: "more_vert"
+                        onClicked: {
+                            memberMenu.member = mrow.modelData;
+                            memberMenu.openAt(more, 0, more.height);
+                        }
                     }
                     MouseArea {
+                        id: mma
                         anchors.fill: parent
+                        anchors.rightMargin: more.visible ? 48 : 0
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        enabled: modelData.jid !== Hermes.status.meJid
-                        onClicked: Hermes.openChat(modelData.jid)
+                        enabled: !mrow.modelData.isMe
+                        onClicked: Hermes.openChat(mrow.modelData.jid)
                     }
                 }
+            }
+
+            Rectangle { width: parent.width - 32; height: 1; anchors.horizontalCenter: parent.horizontalCenter; color: Theme.alpha(Theme.outlineVariant, 0.5) }
+
+            SettingRow {
+                visible: panel.isGroup && !!panel.group && panel.group.iAmMember
+                icon: "logout"
+                label: "Leave group"
+                danger: true
+                onClicked: confirm.ask("Leave " + panel.info.name + "?", "You'll stop getting its messages. An admin can add you back.", "Leave",
+                                       () => panel.groupAct("groups.leave", {}, "You left the group"))
+            }
+            SettingRow {
+                visible: !panel.isGroup && !!panel.info
+                icon: panel.blocked ? "lock_open" : "block"
+                label: panel.blocked ? "Unblock " + (panel.info ? panel.info.name : "") : "Block " + (panel.info ? panel.info.name : "")
+                danger: !panel.blocked
+                onClicked: {
+                    const block = !panel.blocked;
+                    const run = () => Hermes.act("blocklist.set", { chat: panel.info.jid, block: block }, block ? "Blocked" : "Unblocked", (r, err) => { if (!err) panel.reload(); });
+                    if (block)
+                        confirm.ask("Block " + panel.info.name + "?", "They won't be able to call you or send you messages. They aren't told.", "Block", run);
+                    else
+                        run();
+                }
+            }
+        }
+    }
+
+    // ---- menus & dialogs ----
+
+    PopupMenu {
+        id: dmMenu
+        width: 200
+        Repeater {
+            model: [{ s: 0, t: "Off" }, { s: 86400, t: "24 hours" }, { s: 7 * 86400, t: "7 days" }, { s: 90 * 86400, t: "90 days" }]
+            MenuItemRow {
+                required property var modelData
+                icon: panel.info && (panel.info.ephemeral || 0) === modelData.s ? "radio_button_checked" : "radio_button_unchecked"
+                text: modelData.t
+                onTriggered: {
+                    dmMenu.close();
+                    Hermes.act("chats.setDisappearing", { chat: panel.info.jid, seconds: modelData.s },
+                               modelData.s ? "New messages disappear after " + modelData.t : "Disappearing messages off");
+                }
+            }
+        }
+    }
+
+    PopupMenu {
+        id: memberMenu
+        property var member: ({})
+        MenuItemRow {
+            icon: memberMenu.member.isAdmin ? "remove_moderator" : "add_moderator"
+            text: memberMenu.member.isAdmin ? "Dismiss as admin" : "Make group admin"
+            onTriggered: {
+                memberMenu.close();
+                panel.groupAct("groups.members", { members: [memberMenu.member.id], action: memberMenu.member.isAdmin ? "demote" : "promote" },
+                               memberMenu.member.isAdmin ? "Dismissed as admin" : "Made admin");
+            }
+        }
+        MenuItemRow {
+            icon: "chat"
+            text: "Message " + (memberMenu.member.name || "")
+            onTriggered: { memberMenu.close(); Hermes.openChat(memberMenu.member.jid); }
+        }
+        MenuItemRow {
+            icon: "person_remove"
+            text: "Remove from group"
+            danger: true
+            onTriggered: {
+                memberMenu.close();
+                const m = memberMenu.member;
+                confirm.ask("Remove " + m.name + "?", "They'll be removed from " + panel.info.name + ".", "Remove",
+                            () => panel.groupAct("groups.members", { members: [m.id], action: "remove" }, "Removed " + m.name));
+            }
+        }
+    }
+
+    // Confirm dangerous actions
+    Sheet {
+        id: confirm
+        property var run: null
+        property string message: ""
+        function ask(title, message, verb, fn) {
+            confirm.title = title;
+            confirm.message = message;
+            confirm.acceptText = verb;
+            confirm.run = fn;
+            confirm.open();
+        }
+        onAccepted: if (run) run()
+        Text {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            text: confirm.message
+            color: Theme.fgSurfaceVariant
+            font.family: Theme.font
+            font.pixelSize: 14
+        }
+    }
+
+    // Edit name / description
+    Sheet {
+        id: editSheet
+        property var save: null
+        property bool multi: false
+        acceptText: "Save"
+        function edit(title, value, multi, fn) {
+            editSheet.title = title;
+            editSheet.multi = multi;
+            editSheet.save = fn;
+            editField.text = value || "";
+            editArea.text = value || "";
+            editSheet.open();
+            (multi ? editArea : editField.input).forceActiveFocus();
+        }
+        onAccepted: if (save) save(multi ? editArea.text : editField.text)
+        Field {
+            id: editField
+            visible: !editSheet.multi
+            Layout.fillWidth: true
+            icon: "edit"
+            onAccepted: { editSheet.accepted(); editSheet.close(); }
+        }
+        Rectangle {
+            visible: editSheet.multi
+            Layout.fillWidth: true
+            Layout.preferredHeight: 140
+            radius: Theme.radiusMd
+            color: Theme.surfaceContainerHighest
+            ScrollView {
+                anchors.fill: parent
+                anchors.margins: 6
+                TextArea {
+                    id: editArea
+                    background: null
+                    wrapMode: TextArea.Wrap
+                    color: Theme.fgSurface
+                    font.family: Theme.font
+                    font.pixelSize: 14
+                    selectionColor: Theme.primary
+                    selectedTextColor: Theme.fgPrimary
+                }
+            }
+        }
+    }
+
+    // Add members: search contacts or type a number, collect, then add
+    Sheet {
+        id: addSheet
+        title: "Add members"
+        icon: "person_add"
+        acceptText: picked.length ? "Add " + picked.length : "Add"
+        acceptEnabled: picked.length > 0
+        width: 460
+        property var results: []
+        property var picked: [] // [{jid, name}]
+        function search() {
+            Hermes.call("contacts.search", { query: addQ.text.trim() }, (res, err) => {
+                addSheet.results = err ? [] : (res || []).filter(r => !r.jid.endsWith("@g.us"));
+            });
+        }
+        function toggle(r) {
+            const i = picked.findIndex(p => p.jid === r.jid);
+            const next = picked.slice();
+            if (i >= 0) next.splice(i, 1); else next.push(r);
+            picked = next;
+        }
+        onOpened: { picked = []; addQ.text = ""; search(); addQ.input.forceActiveFocus(); }
+        onAccepted: {
+            const names = {};
+            picked.forEach(p => names[p.jid] = p.name);
+            Hermes.call("groups.members", { chat: panel.info.jid, members: picked.map(p => p.jid), action: "add" }, (res, err) => {
+                if (err) { Hermes.toast(err, true); return; }
+                const failed = Object.keys(res || {}).filter(k => res[k] !== "ok");
+                Hermes.toast(failed.length ? failed.length + " not added: " + res[failed[0]] : "Added " + Object.keys(res || {}).length, failed.length > 0);
+                panel.reload();
+            });
+        }
+        Field {
+            id: addQ
+            Layout.fillWidth: true
+            placeholder: "Name, or a number with country code"
+            onTextChanged: addDebounce.restart()
+            onAccepted: {
+                const digits = addQ.text.replace(/[^0-9]/g, "");
+                if (digits.length >= 8 && addSheet.results.length === 0) {
+                    addSheet.toggle({ jid: digits + "@s.whatsapp.net", name: "+" + digits });
+                    addQ.text = "";
+                }
+            }
+        }
+        Timer { id: addDebounce; interval: 200; onTriggered: addSheet.search() }
+        Flow {
+            Layout.fillWidth: true
+            spacing: 6
+            visible: addSheet.picked.length > 0
+            Repeater {
+                model: addSheet.picked
+                Rectangle {
+                    required property var modelData
+                    height: 28
+                    width: chipT.implicitWidth + 34
+                    radius: 14
+                    color: Theme.secondaryContainer
+                    Text { id: chipT; x: 12; anchors.verticalCenter: parent.verticalCenter; text: modelData.name; color: Theme.fgSecondaryContainer; font.family: Theme.font; font.pixelSize: 12 }
+                    Icon { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; name: "close"; size: 14; color: Theme.fgSecondaryContainer }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: addSheet.toggle(modelData) }
+                }
+            }
+        }
+        ListView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 260
+            clip: true
+            model: addSheet.results
+            ScrollBar.vertical: ScrollBar {}
+            delegate: Rectangle {
+                required property var modelData
+                readonly property bool on: addSheet.picked.some(p => p.jid === modelData.jid)
+                readonly property bool member: !!panel.group && panel.group.participants.some(p => p.jid === modelData.jid)
+                width: ListView.view.width
+                height: 50
+                radius: 12
+                color: on ? Theme.secondaryContainer : am.containsMouse ? Theme.alpha(Theme.fgSurface, 0.06) : "transparent"
+                opacity: member ? 0.5 : 1
+                Row {
+                    x: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 12
+                    Avatar { size: 34; jid: modelData.jid; name: modelData.name }
+                    Column {
+                        anchors.verticalCenter: parent.verticalCenter
+                        Text { text: modelData.name; color: Theme.fgSurface; font.family: Theme.font; font.pixelSize: 14 }
+                        Text { text: member ? "Already a member" : "+" + modelData.jid.split("@")[0]; color: Theme.fgSurfaceVariant; font.family: Theme.font; font.pixelSize: 12 }
+                    }
+                }
+                Icon { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; visible: on; name: "check_circle"; filled: true; color: Theme.primary }
+                MouseArea { id: am; anchors.fill: parent; hoverEnabled: true; enabled: !member; cursorShape: Qt.PointingHandCursor; onClicked: addSheet.toggle(modelData) }
             }
         }
     }

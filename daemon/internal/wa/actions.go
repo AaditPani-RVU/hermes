@@ -835,6 +835,9 @@ type GroupInfo struct {
 	Locked       bool          `json:"locked"`
 	IsCommunity  bool          `json:"isCommunity"`
 	Created      int64         `json:"created"`
+	TopicID      string        `json:"topicId"`
+	IAmAdmin     bool          `json:"iAmAdmin"`
+	IAmMember    bool          `json:"iAmMember"`
 }
 
 type Participant struct {
@@ -842,6 +845,9 @@ type Participant struct {
 	Name    string `json:"name"`
 	IsAdmin bool   `json:"isAdmin"`
 	IsSuper bool   `json:"isSuper"`
+	IsMe    bool   `json:"isMe"`
+	// ID is the address WhatsApp uses for this member (often a LID); admin actions need it.
+	ID string `json:"id"`
 }
 
 func (c *Core) GroupInfo(ctx context.Context, chat string) (*GroupInfo, error) {
@@ -857,14 +863,20 @@ func (c *Core) GroupInfo(ctx context.Context, chat string) (*GroupInfo, error) {
 		return nil, err
 	}
 	out := &GroupInfo{JID: chat, Name: gi.Name, Topic: gi.Topic, Announce: gi.IsAnnounce, Locked: gi.IsLocked,
-		IsCommunity: gi.IsParent, Created: unixOrZero(gi.GroupCreated)}
+		IsCommunity: gi.IsParent, Created: unixOrZero(gi.GroupCreated), TopicID: gi.TopicID}
 	for _, p := range gi.Participants {
 		pj := p.JID
 		if !p.PhoneNumber.IsEmpty() {
 			pj = p.PhoneNumber
 		}
 		pj = c.canon(ctx, pj)
-		out.Participants = append(out.Participants, Participant{JID: pj.String(), Name: c.DisplayName(ctx, pj), IsAdmin: p.IsAdmin, IsSuper: p.IsSuperAdmin})
+		me := c.isMe(p.JID) || c.isMe(pj)
+		if me {
+			out.IAmMember = true
+			out.IAmAdmin = p.IsAdmin || p.IsSuperAdmin
+		}
+		out.Participants = append(out.Participants, Participant{JID: pj.String(), Name: c.DisplayName(ctx, pj),
+			IsAdmin: p.IsAdmin || p.IsSuperAdmin, IsSuper: p.IsSuperAdmin, IsMe: me, ID: p.JID.ToNonAD().String()})
 	}
 	sort.Slice(out.Participants, func(i, j int) bool {
 		a, b := out.Participants[i], out.Participants[j]

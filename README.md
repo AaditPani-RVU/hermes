@@ -126,6 +126,8 @@ and right-clicking a message gives **Remind me about this…**
   and older history is fetched on demand. Delivery and read ticks, typing indicators, online status.
 - **Search:** full-text search across every chat, plus a starred-messages view.
 - **Later:** schedule a message for a specific time; the daemon sends it even if the window is closed.
+- **Groups:** rename, edit the description, add/remove members, make or dismiss admins, copy or reset the invite link,
+  "only admins can send / edit info", leave. Disappearing messages (24 h / 7 d / 90 d) for any chat. Block and unblock.
 - **Focus mode:** silence notifications from everyone except a VIP list.
 - **Desktop:** notifications grouped per chat with *Open*, *Reply* and *Mark read* buttons. *Reply* opens a small
   floating quick-reply window (on desktops with inline replies, like KDE or swaync, you type straight into the notification), a status-bar widget that
@@ -240,7 +242,8 @@ hermes updates                    check WhatsApp / library update status
 - [x] Private per-chat notes and text snippets
 - [x] Replying straight from notifications
 - [x] Status: view, reply, post text and photos, private viewing
-- [ ] Group admin, disappearing messages, privacy and profile settings, blocking, channels
+- [x] Group admin, disappearing messages, blocking
+- [ ] Privacy and profile settings, channels
 
 ## Credits
 

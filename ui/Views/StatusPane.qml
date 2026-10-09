@@ -196,10 +196,10 @@ Rectangle {
             font.family: Theme.font
             font.pixelSize: 12
         }
-        Switch {
+        Toggle {
             id: sw
             anchors.right: parent.right
-            anchors.rightMargin: 12
+            anchors.rightMargin: 16
             anchors.verticalCenter: parent.verticalCenter
             checked: pane.feed.receipts
             onToggled: Hermes.call("status.setReceipts", { enabled: checked }, () => Hermes.refreshStatus())

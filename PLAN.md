@@ -342,6 +342,16 @@ the home view groups chats by what they need from you, and chats are cleared, no
 - Fixed `Theme.alpha()/mix()` silently turning colour *strings* into black.
 - **Untested live:** posting (it goes to all your contacts) and receiving real statuses.
 
+### 2026-10-09: Phase C (2) groups, disappearing messages, blocking
+- `wa/groups.go`: `groups.members` (add/remove/promote/demote; per-member results, 403 = their privacy blocks adds),
+  `groups.setName`, `groups.setTopic`, `groups.setFlags` (announce/locked), `groups.inviteLink` (copy/reset), `groups.leave`,
+  `chats.setDisappearing` (0/24h/7d/90d), `blocklist.get/set`. `GroupInfo` now reports `iAmAdmin`, `iAmMember`, `topicId`,
+  and each member's raw `id` (often a LID), which admin actions must use.
+- `InfoPanel` rewritten: edit name/description when allowed, disappearing-messages menu, admin section (invite link,
+  two toggles), member ⋮ menu, Add-members sheet (contact search + typed numbers, chips), Leave/Block with confirmations.
+  New `Toggle` (M3 switch) replaces Basic `Switch`.
+- Live read-only checks: blocklist (29) and a 755-member group's info (finds you, not admin). Mutating actions untested live.
+
 **Not done yet / next:**
 - [x] First real pairing (2026-10-09): QR link works
 - [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)
