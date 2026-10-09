@@ -61,6 +61,10 @@ ShellRoot {
                     onSnoozeRequested: (jid, name, item) => snoozePicker.openFor(jid, name, "")
                     onChatOpened: convo.focusComposer()
                 }
+                SettingsPane {
+                    anchors.fill: parent
+                    visible: rail.section === "settings"
+                }
                 StatusPane {
                     anchors.fill: parent
                     visible: rail.section === "status"
@@ -390,6 +394,8 @@ ShellRoot {
                 case "archived": rail.section = "chats"; Hermes.showArchived = true; break;
                 case "inbox": rail.section = "inbox"; inboxPane.focusList(); break;
                 case "snippets": snippetsSheet.open(); break;
+                case "settings": rail.section = "settings"; break;
+                case "status": rail.section = "status"; break;
                 case "scheduled": rail.section = "scheduled"; break;
                 case "starred": rail.section = "starred"; break;
                 case "markall": Hermes.act("chats.markAllRead", {}, "All chats marked as read"); break;

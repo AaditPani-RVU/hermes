@@ -456,6 +456,29 @@ func registerMethods(srv *rpc.Server, core *wa.Core, st *hs.Store, openUI func(s
 		}
 		return nil, core.SetBlocked(ctx, p.Chat, p.Block)
 	})
+	// Account settings
+	h("settings.get", func(ctx context.Context, _ json.RawMessage) (any, error) { return core.GetSettings(ctx) })
+	h("settings.setPrivacy", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Name, Value string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetPrivacy(ctx, p.Name, p.Value)
+	})
+	h("settings.setAbout", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Text string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetAbout(ctx, p.Text)
+	})
+	h("settings.setName", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Name string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.SetPushName(ctx, p.Name)
+	})
 	h("chats.unread", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		c, m, err := st.TotalUnread(ctx)
 		return map[string]int{"chats": c, "messages": m}, err

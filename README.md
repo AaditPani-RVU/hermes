@@ -128,6 +128,8 @@ and right-clicking a message gives **Remind me about this…**
 - **Later:** schedule a message for a specific time; the daemon sends it even if the window is closed.
 - **Groups:** rename, edit the description, add/remove members, make or dismiss admins, copy or reset the invite link,
   "only admins can send / edit info", leave. Disappearing messages (24 h / 7 d / 90 d) for any chat. Block and unblock.
+- **Settings:** your name and About, every WhatsApp privacy setting (last seen, online, profile photo, About,
+  groups, calls, messages, read receipts), blocked contacts, and Hermes' own options in one place.
 - **Focus mode:** silence notifications from everyone except a VIP list.
 - **Desktop:** notifications grouped per chat with *Open*, *Reply* and *Mark read* buttons. *Reply* opens a small
   floating quick-reply window (on desktops with inline replies, like KDE or swaync, you type straight into the notification), a status-bar widget that
@@ -243,7 +245,8 @@ hermes updates                    check WhatsApp / library update status
 - [x] Replying straight from notifications
 - [x] Status: view, reply, post text and photos, private viewing
 - [x] Group admin, disappearing messages, blocking
-- [ ] Privacy and profile settings, channels
+- [x] Profile and privacy settings
+- [ ] Channels
 
 ## Credits
 

@@ -352,6 +352,13 @@ the home view groups chats by what they need from you, and chats are cleared, no
   New `Toggle` (M3 switch) replaces Basic `Switch`.
 - Live read-only checks: blocklist (29) and a 755-member group's info (finds you, not admin). Mutating actions untested live.
 
+### 2026-10-09: Phase C (3) settings
+- `wa/settings.go`: `settings.get` (push name, About via GetUserInfo, phone, 8 privacy settings), `settings.setPrivacy`
+  (validated against the values the phone offers), `settings.setAbout` (≤139), `settings.setName` (app-state push name, ≤25).
+  Own profile photo is left to the phone (whatsmeow only documents group photos).
+- `SettingsPane` (gear in the rail, or Ctrl+K): profile, privacy choices, read receipts toggle, blocked list with Unblock,
+  Hermes options (transcription, private status viewing, snippets, compatibility). Live read of settings works.
+
 **Not done yet / next:**
 - [x] First real pairing (2026-10-09): QR link works
 - [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)

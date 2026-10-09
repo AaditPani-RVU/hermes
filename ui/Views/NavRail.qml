@@ -93,6 +93,14 @@ Rectangle {
 
         IconButton {
             anchors.horizontalCenter: parent.horizontalCenter
+            icon: "settings"
+            filled: rail.section === "settings"
+            toggled: rail.section === "settings"
+            tip: "Settings"
+            onClicked: rail.section = "settings"
+        }
+        IconButton {
+            anchors.horizontalCenter: parent.horizontalCenter
             icon: Hermes.focusState.active ? "do_not_disturb_on" : "do_not_disturb_off"
             toggled: Hermes.focusState.active
             tip: Hermes.focusState.active ? "Focus mode on — only VIPs notify" : "Focus mode"
