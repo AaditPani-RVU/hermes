@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Hermes
+GenericName=WhatsApp client
+Comment=WhatsApp for Clavis + niri
+Exec=hermes-ui
+Icon=hermes
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=whatsapp;chat;messages;
+StartupWMClass=org.quickshell

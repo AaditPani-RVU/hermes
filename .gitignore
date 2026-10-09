@@ -1,0 +1,4 @@
+daemon/bin/
+*.db
+*.db-wal
+*.db-shm

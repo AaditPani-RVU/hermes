@@ -1,0 +1,12 @@
+#!/bin/sh
+# Open (or focus) the Hermes window. Extra arg / HERMES_OPEN_CHAT = chat JID to open.
+UI_DIR="${HERMES_UI_DIR:-$HOME/.local/share/hermes/ui}"
+CHAT="${1:-$HERMES_OPEN_CHAT}"
+export FONTCONFIG_FILE="$UI_DIR/fontconfig/fonts.conf"
+# Already running? Ask it to show itself.
+if qs -p "$UI_DIR" ipc call hermes open "$CHAT" >/dev/null 2>&1; then
+    exit 0
+fi
+# Make sure the daemon is up (no-op if it is).
+systemctl --user start hermesd.service >/dev/null 2>&1
+HERMES_OPEN_CHAT="$CHAT" exec qs -p "$UI_DIR" --no-duplicate --daemonize

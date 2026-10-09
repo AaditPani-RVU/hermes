@@ -1,0 +1,4 @@
+// Hermes (WhatsApp) — installed by ~/Projects/hermes/install.sh
+binds {
+    Mod+Ctrl+W repeat=false hotkey-overlay-title="Hermes: WhatsApp" { spawn "hermes-ui"; }
+}

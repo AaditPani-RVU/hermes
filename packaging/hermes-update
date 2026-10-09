@@ -1,0 +1,26 @@
+#!/bin/sh
+# Update Hermes' WhatsApp protocol library (whatsmeow), rebuild, test, and restart.
+# Safe to run any time; rolls back if the build or tests fail.
+set -eu
+REPO="${HERMES_REPO:-$HOME/Projects/hermes}"
+export PATH="$HOME/.local/go/bin:$HOME/go/bin:$PATH"
+cd "$REPO/daemon"
+
+echo "→ current: $(go list -m -f '{{.Version}}' go.mau.fi/whatsmeow)"
+cp go.mod go.mod.bak && cp go.sum go.sum.bak
+restore() { mv go.mod.bak go.mod; mv go.sum.bak go.sum; echo "✗ update failed, rolled back"; exit 1; }
+
+go get go.mau.fi/whatsmeow@latest || restore
+go mod tidy || restore
+echo "→ new:     $(go list -m -f '{{.Version}}' go.mau.fi/whatsmeow)"
+go vet ./... || restore
+go test ./... || restore
+go build -o bin/hermesd ./cmd/hermesd || restore
+go build -o bin/hermes ./cmd/hermes || restore
+rm -f go.mod.bak go.sum.bak
+
+install -m 755 bin/hermesd bin/hermes "$HOME/.local/bin/"
+systemctl --user restart hermesd.service
+sleep 3
+"$HOME/.local/bin/hermes" status
+echo "✓ Hermes updated"
