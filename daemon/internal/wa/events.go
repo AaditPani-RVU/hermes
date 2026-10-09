@@ -294,6 +294,12 @@ func (c *Core) handleMessage(ctx context.Context, evt *events.Message, live bool
 		return
 	}
 	incUnread := inserted && !m.FromMe && !c.focused(chat) && chat != "status@broadcast"
+	if chat == statusChat {
+		if inserted {
+			c.Log.Infof("Status from %s (%s)", m.SenderName, m.Type)
+			c.Emit("status.changed", nil)
+		}
+	}
 	_ = c.Store.BumpChat(ctx, chat, m.ID, m.TS, incUnread)
 	if m.FromMe {
 		// Replying from the phone implies the chat was read there.
@@ -391,6 +397,7 @@ func (c *Core) handleHistory(ctx context.Context, data *waHistorySync.HistorySyn
 	}()
 	c.Log.Infof("History sync %s: %d conversations, progress %d%%", data.GetSyncType(), len(data.GetConversations()), data.GetProgress())
 	c.storeInlineContacts(ctx, data)
+	c.storeHistoryStatuses(ctx, data)
 	// Profile names on history messages; whatsmeow only stores live ones.
 	pushed := map[types.JID]bool{}
 	defer func() {

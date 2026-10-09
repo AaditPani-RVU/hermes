@@ -86,6 +86,14 @@ text box: type, press Enter, and it's sent and the chat is marked read. The main
 
 <img src="docs/quick-reply.png" alt="The quick-reply window" width="420">
 
+### Status
+
+See your contacts' statuses from the last 24 hours, with a ring per person showing what's new. The viewer moves
+on by itself, or use ←/→ (Space pauses). Reply privately from the box underneath. Post a coloured text status or a
+photo/video from the Status tab. A switch lets you view privately, so nobody sees that you looked.
+
+<img src="docs/status.png" alt="The status viewer" width="100%">
+
 ### Snooze and remind me
 
 Pick a preset with a number key, or just start typing a time: `in 2h`, `tonight`, `tmr 14:00`, `fri 9am`, `18:30`.
@@ -231,7 +239,8 @@ hermes updates                    check WhatsApp / library update status
 - [x] Voice-note transcription that runs locally (whisper.cpp)
 - [x] Private per-chat notes and text snippets
 - [x] Replying straight from notifications
-- [ ] Status (stories), channels, group admin, privacy settings
+- [x] Status: view, reply, post text and photos, private viewing
+- [ ] Group admin, disappearing messages, privacy and profile settings, blocking, channels
 
 ## Credits
 

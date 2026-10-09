@@ -296,6 +296,10 @@ func (c *Core) convert(ctx context.Context, evt *events.Message) *hs.Message {
 	case msg.Conversation != nil || msg.ExtendedTextMessage != nil:
 		m.Type = "text"
 		m.Text = textOf(msg)
+		if bg := msg.GetExtendedTextMessage().GetBackgroundArgb(); bg != 0 {
+			// Text statuses carry their own background colour.
+			m.Extra = hs.MarshalExtra(map[string]any{"bg": fmt.Sprintf("#%08X", bg)})
+		}
 	case msg.ImageMessage != nil:
 		im := msg.GetImageMessage()
 		m.Type, m.Text, m.MediaMime = "image", im.GetCaption(), im.GetMimetype()

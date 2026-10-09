@@ -338,6 +338,49 @@ func registerMethods(srv *rpc.Server, core *wa.Core, st *hs.Store, openUI func(s
 		srv.Broadcast("snippets.changed", nil)
 		return nil, nil
 	})
+	h("status.list", func(ctx context.Context, _ json.RawMessage) (any, error) { return core.StatusList(ctx) })
+	h("status.view", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ ID string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, core.ViewStatus(ctx, p.ID)
+	})
+	h("status.reply", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ ID, Text string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.ReplyToStatus(ctx, p.ID, p.Text)
+	})
+	h("status.postText", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct {
+			Text string
+			Bg   uint32
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.PostTextStatus(ctx, p.Text, p.Bg)
+	})
+	h("status.postFile", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Path, Caption string }](raw)
+		if err != nil {
+			return nil, err
+		}
+		return core.SendFile(ctx, "status@broadcast", p.Path, p.Caption, "auto", wa.SendOpts{})
+	})
+	h("status.setReceipts", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		p, err := rpc.Bind[struct{ Enabled bool }](raw)
+		if err != nil {
+			return nil, err
+		}
+		v := "on"
+		if !p.Enabled {
+			v = "off"
+		}
+		return nil, st.SetKV(ctx, "status_receipts", v)
+	})
 	h("chats.unread", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		c, m, err := st.TotalUnread(ctx)
 		return map[string]int{"chats": c, "messages": m}, err

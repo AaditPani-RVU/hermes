@@ -39,6 +39,8 @@ Singleton {
     signal incomingCall(string name, bool video)
     signal messagesLoaded
     signal manageSnippetsRequested
+    property var statusFeed: ({ mine: null, authors: [], receipts: true })
+    readonly property int statusUnseen: statusFeed.authors.filter(a => a.unseen > 0).length
     signal quickReplyRequested(string jid)
     signal messageEvent(var m) // every incoming/updated message, any chat
     property var snippets: [] // [{trigger, text}]
@@ -152,6 +154,7 @@ Singleton {
         reloadChats();
         refreshScheduled();
         refreshSnippets();
+        refreshStatus();
         if (currentChat)
             loadMessages(currentChat);
     }
@@ -570,6 +573,25 @@ Singleton {
         if (currentChat)
             call("presence.typing", { chat: currentChat, composing: composing });
     }
+    function refreshStatus() {
+        call("status.list", {}, res => {
+            if (res)
+                root.statusFeed = { mine: res.mine || null, authors: res.authors || [], receipts: res.receipts !== false };
+        });
+    }
+    Timer {
+        id: statusSoon
+        interval: 800
+        onTriggered: root.refreshStatus()
+    }
+    Timer {
+        // Statuses expire after 24 h.
+        interval: 5 * 60 * 1000
+        running: root.ready
+        repeat: true
+        onTriggered: root.refreshStatus()
+    }
+
     function refreshSnippets() {
         call("snippets.list", {}, res => {
             if (res)
@@ -717,6 +739,9 @@ Singleton {
             break;
         case "recording":
             recording = data.active;
+            break;
+        case "status.changed":
+            statusSoon.restart();
             break;
         case "snippets.changed":
             refreshSnippets();

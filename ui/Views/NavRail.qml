@@ -28,6 +28,7 @@ Rectangle {
             model: [
                 { key: "inbox", icon: "inbox", label: "Inbox", badge: Hermes.needsYou },
                 { key: "chats", icon: "forum", label: "All", badge: 0 },
+                { key: "status", icon: "motion_photos_on", label: "Status", badge: Hermes.statusUnseen },
                 { key: "search", icon: "manage_search", label: "Search", badge: 0 },
                 { key: "scheduled", icon: "schedule_send", label: "Later", badge: Hermes.scheduled.length },
                 { key: "starred", icon: "star", label: "Starred", badge: 0 }

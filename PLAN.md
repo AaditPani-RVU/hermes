@@ -327,6 +327,21 @@ the home view groups chats by what they need from you, and chats are cleared, no
   (main window starts hidden). IPC: `qs -p ~/.local/share/hermes/ui ipc call hermes reply <jid>`.
 - No Clavis changes needed.
 
+### 2026-10-09: Phase C (1) Status
+- Found no status had ever reached Hermes (no `status@broadcast` sender keys). Statuses posted before linking come in
+  history sync's `StatusV3Messages`, which was ignored; now ingested (`storeHistoryStatuses`). Live statuses are logged
+  ("Status from …") so we can confirm they arrive; none had in the first ~6 h after linking.
+- `wa/status.go`: `status.list` (last 24 h grouped by author, unseen first; seen state in `hermes_status_seen`),
+  `status.view` (local seen + read receipt unless kv `status_receipts=off`), `status.reply` (DM quoting the status with
+  RemoteJID status@broadcast, like the phone), `status.postText` (ExtendedTextMessage with BackgroundArgb),
+  `status.postFile` (SendFile to status@broadcast; whatsmeow picks recipients from status privacy).
+  Text-status background colours are kept in `extra.bg`.
+- UI: Status rail tab with unseen badge, `StatusPane` (segmented `StatusRing`s, my status, private-viewing switch),
+  `StatusViewer` (9:16 stage, progress bars, ←/→/Space/Esc/R, tap zones, auto-advance 6 s, videos in mpv, reply box),
+  `StatusComposer` (coloured text or photo/video with caption, explicit Post).
+- Fixed `Theme.alpha()/mix()` silently turning colour *strings* into black.
+- **Untested live:** posting (it goes to all your contacts) and receiving real statuses.
+
 **Not done yet / next:**
 - [x] First real pairing (2026-10-09): QR link works
 - [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)

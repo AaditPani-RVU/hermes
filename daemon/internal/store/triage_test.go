@@ -114,3 +114,26 @@ func TestNotesAndSnippets(t *testing.T) {
 		t.Fatalf("delete failed: %+v", list)
 	}
 }
+
+func TestRecentStatuses(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	_ = s.EnsureChat(ctx, "status@broadcast", false)
+	for i, ts := range []int64{100, 5000, 6000} {
+		id := string(rune('a' + i))
+		if _, err := s.UpsertMessage(ctx, &Message{Chat: "status@broadcast", ID: id, Sender: "1@s.whatsapp.net", TS: ts, Type: "text", Text: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = s.MarkStatusSeen(ctx, "b")
+	msgs, seen, err := s.RecentStatuses(ctx, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 || msgs[0].ID != "b" || msgs[1].ID != "c" {
+		t.Fatalf("want b,c oldest first; got %d", len(msgs))
+	}
+	if !seen["b"] || seen["c"] {
+		t.Fatalf("seen = %v", seen)
+	}
+}

@@ -76,10 +76,14 @@ Singleton {
         return nameColors[h % nameColors.length];
     }
 
+    // Both accept colours or colour strings ("#ffffff"); strings have no .r/.g/.b on their own.
     function alpha(c, a) {
+        c = Qt.color(c);
         return Qt.rgba(c.r, c.g, c.b, a);
     }
     function mix(a, b, t) {
+        a = Qt.color(a);
+        b = Qt.color(b);
         return Qt.rgba(a.r * (1 - t) + b.r * t, a.g * (1 - t) + b.g * t, a.b * (1 - t) + b.b * t, 1);
     }
 

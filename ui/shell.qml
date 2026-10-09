@@ -61,6 +61,19 @@ ShellRoot {
                     onSnoozeRequested: (jid, name, item) => snoozePicker.openFor(jid, name, "")
                     onChatOpened: convo.focusComposer()
                 }
+                StatusPane {
+                    anchors.fill: parent
+                    visible: rail.section === "status"
+                    onViewRequested: (idx, mine) => {
+                        const feed = Hermes.statusFeed;
+                        if (mine && feed.mine)
+                            statusViewer.open([feed.mine], 0);
+                        else
+                            statusViewer.open(feed.authors, idx);
+                    }
+                    onPostText: statusComposer.openText()
+                    onPostMedia: statusComposer.openMedia()
+                }
                 ChatListPane {
                     id: chatList
                     anchors.fill: parent
@@ -174,6 +187,13 @@ ShellRoot {
             PairingView {
                 anchors.fill: parent
                 visible: !Hermes.ready
+            }
+
+            StatusViewer {
+                id: statusViewer
+                anchors.fill: parent
+                z: 40
+                onClosed: root.forceActiveFocus()
             }
 
             // Daemon / update banner
@@ -381,6 +401,9 @@ ShellRoot {
         }
         SnippetsSheet {
             id: snippetsSheet
+        }
+        StatusComposer {
+            id: statusComposer
         }
         SnoozePicker {
             id: snoozePicker

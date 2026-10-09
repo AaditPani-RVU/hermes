@@ -174,6 +174,7 @@ var chatMigrations = []string{
 	`ALTER TABLE hermes_chats ADD COLUMN replied_ts INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE hermes_chats ADD COLUMN note TEXT NOT NULL DEFAULT ''`,
 	`CREATE TABLE IF NOT EXISTS hermes_snippets (name TEXT PRIMARY KEY, text TEXT NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS hermes_status_seen (id TEXT PRIMARY KEY, ts INTEGER NOT NULL)`,
 }
 
 func Open(ctx context.Context, db *sql.DB) (*Store, error) {
@@ -751,6 +752,47 @@ func (s *Store) DueSnoozes(ctx context.Context, now int64) ([]*Chat, error) {
 		s.fillPreview(ctx, c)
 	}
 	return out, nil
+}
+
+// ---- Status ----
+
+// RecentStatuses returns statuses newer than since (oldest first) and which ones you've seen.
+func (s *Store) RecentStatuses(ctx context.Context, since int64) ([]*Message, map[string]bool, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+msgCols+` FROM hermes_messages
+		WHERE chat='status@broadcast' AND ts > ? AND revoked=0 AND type NOT IN ('reaction','system','unknown')
+		ORDER BY ts`, since)
+	if err != nil {
+		return nil, nil, err
+	}
+	var out []*Message
+	for rows.Next() {
+		m, err := scanMsg(rows)
+		if err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		m.Reactions = []Reaction{}
+		out = append(out, m)
+	}
+	rows.Close()
+	seen := map[string]bool{}
+	srows, err := s.DB.QueryContext(ctx, `SELECT id FROM hermes_status_seen WHERE ts > ?`, since-86400)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer srows.Close()
+	for srows.Next() {
+		var id string
+		if srows.Scan(&id) == nil {
+			seen[id] = true
+		}
+	}
+	return out, seen, srows.Err()
+}
+
+func (s *Store) MarkStatusSeen(ctx context.Context, id string) error {
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO hermes_status_seen (id, ts) VALUES (?, ?) ON CONFLICT(id) DO NOTHING`, id, time.Now().Unix())
+	return err
 }
 
 // ---- Snippets: text you expand with ;trigger in the composer ----
