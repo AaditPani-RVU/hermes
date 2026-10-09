@@ -27,6 +27,13 @@ func TestPickModel(t *testing.T) {
 	}
 }
 
+func TestShortLinks(t *testing.T) {
+	got := shortLinks("see https://www.instagram.com/reel/Dbg?x=1 and http://eternaworld.in/a")
+	if got != "see [link: instagram.com] and [link: eternaworld.in]" {
+		t.Errorf("%q", got)
+	}
+}
+
 func TestCleanLLM(t *testing.T) {
 	if got := cleanLLM("<think>hmm</think>\n Hello "); got != "Hello" {
 		t.Errorf("%q", got)
@@ -45,10 +52,19 @@ func TestChatTranscript(t *testing.T) {
 		{TS: 1760000120, Type: "image", Text: ""},
 	}
 	tr := chatTranscript(msgs, ch)
-	for _, want := range []string{"] Maya: kal milte hain?", "] You: (replying to \"kal milte hain?\") yes 6 baje", "] Maya: 📷 Photo"} {
+	for _, want := range []string{"] Maya: kal milte hain?\n", "You: (re \"kal milte hain?\") yes 6 baje\n", "Maya: 📷 Photo"} {
 		if !strings.Contains(tr, want) {
 			t.Errorf("missing %q in\n%s", want, tr)
 		}
+	}
+	// Same sender, minutes apart: one line.
+	tr2 := chatTranscript([]*hs.Message{
+		{TS: 1760000000, Type: "text", Text: "a", SenderName: "Ravi Kumar", Sender: "2@s"},
+		{TS: 1760000030, Type: "text", Text: "b", SenderName: "Ravi Kumar", Sender: "2@s"},
+		{TS: 1760003000, Type: "text", Text: "c", SenderName: "Ravi Kumar", Sender: "2@s"},
+	}, &hs.Chat{IsGroup: true})
+	if !strings.Contains(tr2, "Ravi: a / b\n[") || !strings.Contains(tr2, "Ravi: c") {
+		t.Errorf("merging:\n%s", tr2)
 	}
 	if strings.Contains(tr, "gone") {
 		t.Error("revoked message included")

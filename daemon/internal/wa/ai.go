@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -87,12 +88,13 @@ func (c *Core) Summarize(ctx context.Context, chat, scope string, n int, token s
 	}
 	system := "You summarise WhatsApp chats for " + me + ", who reads your summary instead of scrolling. " +
 		"Write in English even if the chat mixes languages. Be brief and concrete; never invent anything. " +
-		"Use these sections, skipping any that would be empty:\n" +
+		"Start directly with the first heading, no preamble. Use these sections, leaving out any that would be empty:\n" +
 		"**Gist**: one or two sentences.\n" +
-		"**For you**: questions, requests or mentions aimed at " + me + " (say who).\n" +
-		"**Plans & dates**: anything scheduled, with day and time.\n" +
+		"**For you**: only messages that name " + me + ", @-mention them, or reply to something \"You\" wrote. " +
+		"General questions to the group are not for you. Say who asked.\n" +
+		"**Plans & dates**: things actually scheduled, with day and time.\n" +
 		"**Decisions**: what was agreed.\n" +
-		"Use short bullet points under each heading. Messages from \"You\" were written by " + me + "."
+		"Short bullet points under each heading. Lines from \"You\" were written by " + me + "."
 	prompt := fmt.Sprintf("%s: \"%s\". %d messages, oldest first:\n\n%s", kind, ch.Name, len(msgs), transcript)
 	emit := func(text string, done bool) {
 		c.Emit("summary", map[string]any{"token": token, "chat": chat, "text": text, "done": done})
@@ -105,39 +107,68 @@ func (c *Core) Summarize(ctx context.Context, chat, scope string, n int, token s
 	return out, nil
 }
 
-// chatTranscript renders messages as "[Fri 18:02] Name: text" lines for a prompt.
+var linkRe = regexp.MustCompile(`https?://(?:www\.)?([^/\s]+)\S*`)
+
+// shortLinks turns URLs into "[link: instagram.com]": the model gets the gist for a few tokens.
+func shortLinks(s string) string { return linkRe.ReplaceAllString(s, "[link: $1]") }
+
+// chatTranscript renders messages compactly for a prompt: reading the prompt is most of the time a
+// summary takes on a small GPU, so every token counts. Consecutive messages from one person are joined
+// with " / ", first names only, and a time only after a gap of 20+ minutes.
+//
+//	--- Fri 9 Oct ---
+//	[18:02] Ravi: kal ka plan? / library at 6
+//	Asha: done
 func chatTranscript(msgs []*hs.Message, ch *hs.Chat) string {
 	var sb strings.Builder
-	var day string
+	var day, last string
+	var lastTS int64
 	for _, m := range msgs {
 		if m.Revoked || m.Type == "system" || m.Type == "call" {
 			continue
 		}
-		text := hs.Preview(m)
+		text := shortLinks(hs.Preview(m))
 		if text == "" {
 			continue
 		}
-		if r := []rune(text); len(r) > 400 {
-			text = string(r[:400]) + "…"
+		if r := []rune(text); len(r) > 300 {
+			text = string(r[:300]) + "…"
+		}
+		if m.QuotedText != "" {
+			text = "(re \"" + oneLine(m.QuotedText, 40) + "\") " + text
 		}
 		t := time.Unix(m.TS, 0)
-		if d := t.Format("Mon 2 Jan"); d != day {
-			day = d
-			fmt.Fprintf(&sb, "--- %s ---\n", d)
-		}
-		who := m.SenderName
+		who := hs.ShortName(m.SenderName)
 		switch {
 		case m.FromMe:
 			who = "You"
 		case !ch.IsGroup:
-			who = ch.Name
+			who = hs.ShortName(ch.Name)
 		case who == "":
 			who = strings.SplitN(m.Sender, "@", 2)[0]
 		}
-		if m.QuotedText != "" {
-			text = "(replying to \"" + oneLine(m.QuotedText, 60) + "\") " + text
+		newDay := t.Format("Mon 2 Jan") != day
+		gap := m.TS-lastTS >= 20*60
+		if who == last && !newDay && !gap {
+			sb.WriteString(" / " + text)
+			lastTS = m.TS
+			continue
 		}
-		fmt.Fprintf(&sb, "[%s] %s: %s\n", t.Format("15:04"), who, strings.ReplaceAll(text, "\n", " / "))
+		if sb.Len() > 0 {
+			sb.WriteByte('\n')
+		}
+		if newDay {
+			day = t.Format("Mon 2 Jan")
+			fmt.Fprintf(&sb, "--- %s ---\n", day)
+		}
+		if newDay || gap {
+			fmt.Fprintf(&sb, "[%s] ", t.Format("15:04"))
+		}
+		sb.WriteString(who + ": " + text)
+		last, lastTS = who, m.TS
+	}
+	if sb.Len() > 0 {
+		sb.WriteByte('\n')
 	}
 	return sb.String()
 }

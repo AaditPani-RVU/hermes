@@ -115,32 +115,25 @@ func (c *Core) llmChat(ctx context.Context, system, prompt string, maxTokens int
 	if !st.Available {
 		return "", errors.New(st.Error)
 	}
-	body, _ := json.Marshal(map[string]any{
-		"model": st.Model,
-		"messages": []map[string]string{
-			{"role": "system", "content": system},
-			{"role": "user", "content": prompt},
-		},
-		"stream":     true,
-		"keep_alive": "10m",
-		"options":    map[string]any{"num_ctx": 8192, "num_predict": maxTokens, "temperature": 0.2},
-	})
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", st.URL+"/api/chat", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	options := map[string]any{"num_ctx": ctxSize(system, prompt, maxTokens), "num_predict": maxTokens, "temperature": 0.2}
+	// All layers on the GPU: on a 4 GB card Ollama's own estimate leaves half of a 4B model on the CPU,
+	// which halves the speed. If the card really is full, fall back to Ollama's split.
+	gpuAll := c.Store.GetKV(ctx, "llm_gpu") != "auto"
+	if gpuAll {
+		options["num_gpu"] = 999
+	}
+	resp, err := c.llmPost(ctx, st, system, prompt, options)
+	if err != nil && gpuAll {
+		c.Log.Warnf("LLM with all layers on GPU failed (%v), retrying with Ollama's split", err)
+		delete(options, "num_gpu")
+		resp, err = c.llmPost(ctx, st, system, prompt, options)
+	}
 	if err != nil {
-		return "", fmt.Errorf("ollama: %w", err)
+		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		var e struct {
-			Error string `json:"error"`
-		}
-		_ = json.NewDecoder(resp.Body).Decode(&e)
-		return "", fmt.Errorf("ollama: %s", e.Error)
-	}
 	var sb strings.Builder
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
@@ -176,6 +169,42 @@ func (c *Core) llmChat(ctx context.Context, system, prompt string, maxTokens int
 		onChunk(out)
 	}
 	return out, nil
+}
+
+func (c *Core) llmPost(ctx context.Context, st *LLMStatus, system, prompt string, options map[string]any) (*http.Response, error) {
+	body, _ := json.Marshal(map[string]any{
+		"model": st.Model,
+		"messages": []map[string]string{
+			{"role": "system", "content": system},
+			{"role": "user", "content": prompt},
+		},
+		"stream":     true,
+		"keep_alive": "10m",
+		"options":    options,
+	})
+	req, _ := http.NewRequestWithContext(ctx, "POST", st.URL+"/api/chat", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("ollama: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		defer resp.Body.Close()
+		var e struct {
+			Error string `json:"error"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&e)
+		return nil, fmt.Errorf("ollama: %s", e.Error)
+	}
+	return resp, nil
+}
+
+// ctxSize fits the context window to the prompt (≈3 characters per token for chat text), in steps
+// of 1024 so Ollama can keep reusing a loaded model. A smaller window leaves more room on the GPU.
+func ctxSize(system, prompt string, maxTokens int) int {
+	need := (len(system)+len(prompt))/3 + maxTokens + 256
+	n := (need + 1023) / 1024 * 1024
+	return min(max(n, 2048), 8192)
 }
 
 func cleanLLM(s string) string {

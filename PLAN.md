@@ -397,6 +397,13 @@ the home view groups chats by what they need from you, and chats are cleared, no
   `wa/llm.go` talks to it (kv `llm_url`, `llm_model` = "" picks the first of gemma3:4b → qwen2.5:3b → … installed; kv `llm=off`
   disables). Streaming `/api/chat`, `keep_alive` 10 m, `num_ctx` 8192, `<think>` blocks stripped. gemma3:4b: ~7 s cold load, then
   ~30 tok/s on the GTX 1650; 50-message catch-up ≈ 17 s cold.
+  **Speed-up (2026-10-10):** Ollama's own estimate left gemma3:4b 45 % on the CPU (it only used 2.9 of 4 GB), so requests
+  now ask for all layers on the GPU (`num_gpu` 999, falls back to Ollama's split on error; kv `llm_gpu=auto` disables) and
+  size `num_ctx` to the prompt. Reading the prompt is the bottleneck (~170 tok/s even fully on a GTX 1650), so the transcript
+  is compact: consecutive messages merged with " / ", first names, times only after 20-min gaps, URLs → "[link: site]".
+  150-message summary: 58 s → 17–29 s warm. Prompt now forbids a preamble and limits "For you" to explicit mentions/replies.
+  Tried qwen2.5 1.5B (user's local GGUF, imported as `qwen2.5-1.5b-local`): 12.5 s but missed every @-mention and garbled
+  dates, so gemma3:4b stays the default. DeepSeek-R1 distills were ruled out: they think for hundreds of tokens first.
 - **Translate** (`messages.translate`, cached in `hermes_translations`): message menu → Translate; shown under the message,
   Hide to dismiss. Prompt handles romanised Hindi/Kannada ("haan bhai…"). Target language kv `translate_lang` (default English).
 - **Catch-up summaries** (`chats.summarize` scope unread | recent n ≤ 400, streamed as `summary` events by token): header

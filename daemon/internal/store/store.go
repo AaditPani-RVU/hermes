@@ -440,10 +440,14 @@ func (s *Store) Senders(ctx context.Context) ([]string, error) {
 // ShortName is the first word of a sender name for compact lists, keeping the
 // "~ " marker that flags an unsaved contact's profile name.
 func ShortName(name string) string {
+	prefix := ""
 	if rest, ok := strings.CutPrefix(name, "~ "); ok {
-		return "~ " + strings.Fields(rest + " ")[0]
+		prefix, name = "~ ", rest
 	}
-	return strings.Fields(name + " ")[0]
+	if f := strings.Fields(name); len(f) > 0 {
+		return prefix + f[0]
+	}
+	return strings.TrimSpace(prefix + name) // empty or blank: never panic
 }
 
 func (s *Store) SetChatAvatar(ctx context.Context, jid, path, id string) error {
