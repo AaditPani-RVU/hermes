@@ -231,3 +231,54 @@ function snoozeOptions() {
     out.push({ label: "Next week", ts: at(((8 - dow) % 7) || 7, 9) });
     return out;
 }
+
+// Parse a typed snooze time. Returns unix seconds, or 0 if it doesn't parse or is in the past.
+// Accepts: "in 2h", "45m", "3d", "18:30", "6pm", "6:15pm", "tomorrow", "tmr 14:00", "fri", "friday 9am".
+function parseWhen(input) {
+    const s = (input || "").trim().toLowerCase().replace(/\s+/g, " ");
+    if (!s)
+        return 0;
+    const now = new Date();
+    let m = s.match(/^(?:in )?(\d+(?:\.\d+)?) ?(m|min|mins|minutes?|h|hr|hrs|hours?|d|days?)$/);
+    if (m) {
+        const n = parseFloat(m[1]);
+        const unit = m[2][0] === "m" ? 60 : m[2][0] === "h" ? 3600 : 86400;
+        return Math.floor(now / 1000 + n * unit);
+    }
+    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    let dayOffset = -1;
+    let rest = s;
+    m = rest.match(/^(today|tonight|tomorrow|tmr|tmrw|(sun|mon|tue|wed|thu|fri|sat)[a-z]*)\b ?(.*)$/);
+    if (m) {
+        rest = m[3];
+        if (m[1] === "today" || m[1] === "tonight")
+            dayOffset = 0;
+        else if (m[1].startsWith("t"))
+            dayOffset = 1;
+        else {
+            const target = days.indexOf(m[2]);
+            dayOffset = ((target - now.getDay()) + 7) % 7 || 7;
+        }
+        if (!rest)
+            rest = m[1] === "tonight" ? "20:00" : "9:00";
+    }
+    rest = rest.replace(/^at /, "");
+    m = rest.match(/^(\d{1,2})(?::(\d{2}))? ?(am|pm)?$/);
+    if (!m)
+        return 0;
+    let h = parseInt(m[1]);
+    const min = m[2] ? parseInt(m[2]) : 0;
+    if (m[3] === "pm" && h < 12)
+        h += 12;
+    if (m[3] === "am" && h === 12)
+        h = 0;
+    if (h > 23 || min > 59)
+        return 0;
+    const d = new Date(now);
+    d.setHours(h, min, 0, 0);
+    if (dayOffset >= 0)
+        d.setDate(now.getDate() + dayOffset);
+    else if (d <= now)
+        d.setDate(d.getDate() + 1); // a bare time that's passed means tomorrow
+    return d > now ? Math.floor(d / 1000) : 0;
+}

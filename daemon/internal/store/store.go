@@ -34,6 +34,7 @@ type Chat struct {
 	DoneTS       int64  `json:"doneTs"`
 	SnoozeUntil  int64  `json:"snoozeUntil"`
 	SnoozeMsg    string `json:"snoozeMsg"`
+	SnoozeNote   string `json:"snoozeNote"` // preview of SnoozeMsg, for "remind me about this"
 	MentionTS    int64  `json:"mentionTs"`
 	RepliedTS    int64  `json:"repliedTs"`
 	Bucket       string `json:"bucket"` // triage: reply mention fyi waiting snoozed done
@@ -288,6 +289,11 @@ func (s *Store) GetChat(ctx context.Context, jid string) (*Chat, error) {
 }
 
 func (s *Store) fillPreview(ctx context.Context, c *Chat) {
+	if c.SnoozeMsg != "" {
+		if m, _ := s.GetMessage(ctx, c.JID, c.SnoozeMsg); m != nil {
+			c.SnoozeNote = Preview(m)
+		}
+	}
 	if c.LastMsgID == "" {
 		return
 	}

@@ -183,29 +183,8 @@ Rectangle {
         anchors.bottom: composer.top
         anchors.left: parent.left
         anchors.right: infoPanel.left
-        color: Theme.surfaceContainerLowest
+        color: Theme.surface
         clip: true
-
-        // Subtle dotted wallpaper
-        Canvas {
-            id: dots
-            anchors.fill: parent
-            opacity: 0.35
-            onPaint: {
-                const ctx = getContext("2d");
-                ctx.clearRect(0, 0, width, height);
-                ctx.fillStyle = Theme.outlineVariant;
-                for (let y = 12; y < height; y += 26)
-                    for (let x = (y / 26) % 2 ? 12 : 25; x < width; x += 26)
-                        ctx.fillRect(x, y, 1.6, 1.6);
-            }
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
-            Connections {
-                target: Theme
-                function onOutlineVariantChanged() { dots.requestPaint(); }
-            }
-        }
 
         ListView {
             id: list
@@ -237,8 +216,12 @@ Rectangle {
                     Hermes.loadOlder();
             }
 
-            delegate: MessageBubble {
+            delegate: MessageRow {
                 isGroup: pane.isGroup
+                chatName: pane.info ? pane.info.name : ""
+                chatAvatar: pane.info ? pane.info.avatarPath : ""
+                onReplyRequested: composer.startReply(Hermes.messages.get(index))
+                onRemindRequested: pane.snoozeRequested(id)
                 highlighted: list.highlightId === id
                 onMenuRequested: (item, x, y) => msgMenu.show(Hermes.messages.get(index), item, x, y)
                 onQuoteClicked: qid => {
@@ -259,10 +242,29 @@ Rectangle {
                 }
             }
 
+            Connections {
+                target: Hermes
+                function onMessagesLoaded() {
+                    if (!Hermes.jumpTo)
+                        return;
+                    const i = Hermes.msgIndex(Hermes.jumpTo);
+                    Hermes.jumpTo = "";
+                    if (i < 0)
+                        return;
+                    list.positionViewAtIndex(i, ListView.Center);
+                    list.highlightId = Hermes.messages.get(i).id;
+                    clearHighlight.interval = 3000;
+                    clearHighlight.restart();
+                }
+            }
+
             Timer {
                 id: clearHighlight
                 interval: 1600
-                onTriggered: list.highlightId = ""
+                onTriggered: {
+                    list.highlightId = "";
+                    interval = 1600;
+                }
             }
         }
 

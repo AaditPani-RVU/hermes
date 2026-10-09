@@ -52,7 +52,21 @@ still one click away under **All**.
 Marking a chat done or snoozing it also marks it read on WhatsApp. Done and snooze themselves live only in Hermes;
 your phone shows the chat as normal.
 
-<img src="docs/convo.png" alt="A conversation in Hermes with Done and Snooze in the header" width="100%">
+### Conversations read like a transcript
+
+No bubbles and no wallpaper. Messages are left-aligned under the sender's name, the way Slack or a document
+reads, so long threads are easy to scan. Anything aimed at you (an @-mention or a reply to your message) gets
+an accent bar. Hovering a message shows **react**, **reply**, **remind me** and **more**, and reactions are
+chips you click to add or remove your own.
+
+<img src="docs/convo.png" alt="A group conversation in Hermes, laid out as a transcript" width="100%">
+
+### Snooze and remind me
+
+Pick a preset with a number key, or just start typing a time: `in 2h`, `tonight`, `tmr 14:00`, `fri 9am`, `18:30`.
+A reminder on a specific message shows that message in the inbox, and opening the chat jumps straight to it.
+
+<img src="docs/snooze.png" alt="The snooze dialog with presets and a typed time" width="100%">
 
 ### Keyboard
 
@@ -79,8 +93,8 @@ and right-clicking a message gives **Remind me about this…**
 - **Search:** full-text search across every chat, plus a starred-messages view.
 - **Later:** schedule a message for a specific time; the daemon sends it even if the window is closed.
 - **Focus mode:** silence notifications from everyone except a VIP list.
-- **Desktop:** notifications grouped per chat with *Open* and *Mark read* buttons, a status-bar widget with
-  quick reply, a niri keybind, and Material 3 colours that follow your wallpaper.
+- **Desktop:** notifications grouped per chat with *Open* and *Mark read* buttons, a status-bar widget that
+  counts the chats that need you (with quick reply, and middle-click to mark done), a niri keybind, and Material 3 colours that follow your wallpaper.
 - **Terminal:** a `hermes` CLI for scripts and status bars (see below).
 
 **Not supported:** voice and video calls (no open-source implementation exists; Hermes shows the incoming
@@ -177,7 +191,7 @@ hermes updates                    check WhatsApp / library update status
 
 - [x] Full messaging and media, sync with phone, search, scheduling, focus mode
 - [x] Triage inbox with done, snooze and remind-me
-- [ ] A denser, transcript-style conversation view to match the inbox
+- [x] Transcript-style conversation view, typed snooze times, message reminders
 - [ ] Voice-note transcription that runs locally (whisper.cpp)
 - [ ] Private per-chat notes, text snippets, replying from notifications
 - [ ] Status (stories), channels, group admin, privacy settings

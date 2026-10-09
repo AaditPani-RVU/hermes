@@ -26,6 +26,7 @@ Popup {
         msgId = msg || "";
         options = F.snoozeOptions();
         current = 0;
+        custom.text = "";
         open();
     }
     onOpened: contentItem.forceActiveFocus()
@@ -58,7 +59,13 @@ Popup {
         spacing: 2
         focus: true
         Keys.onPressed: e => {
-            if (e.key >= Qt.Key_1 && e.key <= Qt.Key_9) {
+            if (e.key === Qt.Key_Tab || e.key === Qt.Key_Slash) {
+                custom.input.forceActiveFocus();
+            } else if (/^[a-z]$/i.test(e.text)) {
+                // Start typing a time without reaching for the mouse.
+                custom.input.forceActiveFocus();
+                custom.text = e.text;
+            } else if (e.key >= Qt.Key_1 && e.key <= Qt.Key_9) {
                 root.pick(e.key - Qt.Key_1);
             } else if (e.key === Qt.Key_Down || e.key === Qt.Key_J) {
                 root.current = Math.min(root.options.length - 1, root.current + 1);
@@ -82,7 +89,7 @@ Popup {
                 anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideRight
                 textFormat: Text.StyledText
-                text: (root.msgId ? "Remind me about this message" : "Snooze")
+                text: (root.msgId ? "Remind me" : "Snooze")
                     + (root.chatName ? "  <font color='" + Theme.fgSurfaceVariant + "'>" + F.escapeHtml(root.chatName) + "</font>" : "")
                 color: Theme.fgSurface
                 font.family: Theme.font
@@ -136,6 +143,33 @@ Popup {
                     onClicked: root.pick(index)
                 }
             }
+        }
+        // Or type it
+        Item { width: parent.width; height: 6 }
+        Field {
+            id: custom
+            width: parent.width
+            icon: "edit_calendar"
+            placeholder: "Type a time: in 2h, tmr 14:00, fri 9am"
+            readonly property real when: F.parseWhen(text)
+            onAccepted: {
+                if (when) {
+                    Hermes.snooze(root.chat, when, root.msgId);
+                    root.close();
+                }
+            }
+            onEscaped: root.close()
+        }
+        Text {
+            width: parent.width
+            height: 26
+            leftPadding: 14
+            verticalAlignment: Text.AlignVCenter
+            text: custom.text.trim() === "" ? "Tab or just start typing to pick your own time"
+                : custom.when ? "↵  " + F.whenLabel(custom.when) : "Didn't catch that"
+            color: custom.text.trim() !== "" && !custom.when ? Theme.error : Theme.fgSurfaceVariant
+            font.family: Theme.font
+            font.pixelSize: 12
         }
     }
 }

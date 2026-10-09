@@ -3,7 +3,9 @@ import QtQuick.Layouts
 import qs.Services
 import "../Services/Format.js" as F
 
-// One message row in the conversation (list is bottom-to-top: index+1 is older).
+// One message in the conversation transcript (list is bottom-to-top: index+1 is older).
+// Messages read like a document: avatar + name + time on the first of a run, then the
+// sender's follow-ups stacked underneath, all left-aligned. No bubbles.
 Item {
     id: root
     required property int index
@@ -35,342 +37,356 @@ Item {
     required property string reactions
 
     property bool isGroup: false
-    property real maxBubble: Math.min(560, width * 0.72)
+    property string chatName: ""
+    property string chatAvatar: ""
     property bool highlighted: false
     signal menuRequested(var item, real x, real y)
     signal replyRequested
+    signal remindRequested
     signal quoteClicked(string id)
     signal mediaOpened(string path, string kind)
 
+    readonly property int gutter: 72
+    readonly property real maxBubble: Math.max(200, Math.min(720, width - gutter - 32))
     readonly property var older: index + 1 < Hermes.messages.count ? Hermes.messages.get(index + 1) : null
-    readonly property var newer: index > 0 ? Hermes.messages.get(index - 1) : null
     readonly property bool newDay: !older || F.dayKey(older.ts) !== F.dayKey(ts)
-    readonly property bool groupedWithOlder: !!older && !newDay && older.sender === sender && ts - older.ts < 300 && older.type !== "system"
-    readonly property bool showName: isGroup && !fromMe && !groupedWithOlder
+    readonly property bool system: type === "system"
+    readonly property bool groupedWithOlder: !!older && !newDay && older.fromMe === fromMe && older.sender === sender && ts - older.ts < 300 && older.type !== "system" && !system
     readonly property var reactionList: { try { return JSON.parse(reactions); } catch (e) { return []; } }
     readonly property var extraObj: { try { return extra ? JSON.parse(extra) : ({}); } catch (e) { return {}; } }
     readonly property bool bare: (type === "sticker" || (type === "text" && F.isJumboEmoji(text))) && !quotedId && !revoked
     readonly property bool isMedia: (type === "image" || type === "video" || type === "gif") && !revoked
-    readonly property color bubbleColor: fromMe ? Theme.primaryContainer : Theme.surfaceContainerHigh
-    readonly property color inkColor: fromMe ? Theme.fgPrimaryContainer : Theme.fgSurface
-    readonly property color subColor: Theme.alpha(inkColor, 0.66)
-    readonly property string footerReserve: "<span style='color:transparent'>&nbsp;&nbsp;" + (edited ? "edited " : "") + (starred ? "★ " : "") + "00:00" + (fromMe ? " ✓✓" : "") + "&nbsp;</span>"
+    // Something aimed at you: an @-mention or a reply to your message.
+    readonly property bool forMe: !fromMe && !revoked && (quotedSender === "You" || /(^|\s)@You\b/.test(text))
+    readonly property string displayName: fromMe ? "You" : isGroup ? senderName : (chatName || senderName)
+    readonly property color nameInk: fromMe ? Theme.primary : isGroup ? Theme.nameColor(sender) : Theme.fgSurface
+    // Content components below expect these.
+    readonly property color inkColor: Theme.fgSurface
+    readonly property color subColor: Theme.fgSurfaceVariant
 
     width: ListView.view ? ListView.view.width : 600
-    height: col.implicitHeight + (groupedWithOlder ? 2 : 8)
+    height: col.implicitHeight
+
+    HoverHandler { id: hover }
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: (pt, button) => root.menuRequested(root, pt.position.x, pt.position.y)
+    }
 
     Column {
         id: col
         width: parent.width
-        anchors.bottom: parent.bottom
         spacing: 0
 
-        // Day separator chip
+        // Day divider: a rule with the date on it
         Item {
             visible: root.newDay
             width: parent.width
-            height: visible ? 44 : 0
+            height: visible ? 48 : 0
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: 20
+                anchors.rightMargin: 20
+                anchors.verticalCenter: parent.verticalCenter
+                height: 1
+                color: Theme.alpha(Theme.outlineVariant, 0.6)
+            }
             Rectangle {
                 anchors.centerIn: parent
-                height: 26
-                width: dayText.implicitWidth + 24
-                radius: 13
-                color: Theme.surfaceContainerHighest
+                width: dayText.implicitWidth + 20
+                height: 22
+                radius: 11
+                color: Theme.surface
+                border.width: 1
+                border.color: Theme.alpha(Theme.outlineVariant, 0.6)
                 Text {
                     id: dayText
                     anchors.centerIn: parent
                     text: F.dayLabel(root.ts)
                     color: Theme.fgSurfaceVariant
                     font.family: Theme.font
-                    font.pixelSize: 12
-                    font.weight: Font.Medium
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 0.4
                 }
             }
         }
 
+        // System notices (joins, changes): one quiet centered line
+        Text {
+            visible: root.system
+            width: parent.width
+            height: visible ? implicitHeight + 16 : 0
+            verticalAlignment: Text.AlignVCenter
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            text: root.text
+            color: Theme.fgSurfaceVariant
+            font.family: Theme.font
+            font.pixelSize: 12
+            font.italic: true
+        }
+
         Item {
             id: rowItem
+            visible: !root.system
             width: parent.width
-            height: bubble.height + (reactionsRow.visible ? 14 : 0)
+            height: visible ? content.implicitHeight + (root.groupedWithOlder ? 4 : 14) : 0
 
+            // Row tint: hover, jump highlight, or "this is for you"
             Rectangle {
-                // Highlight flash when jumping to a quoted message.
                 anchors.fill: parent
-                color: Theme.alpha(Theme.primary, 0.14)
-                opacity: root.highlighted ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 600 } }
+                color: root.highlighted ? Theme.alpha(Theme.primary, 0.16)
+                    : root.forMe ? Theme.alpha(Theme.tertiary, hover.hovered ? 0.12 : 0.08)
+                    : hover.hovered ? Theme.alpha(Theme.fgSurface, 0.035) : "transparent"
+                Behavior on color { ColorAnimation { duration: Theme.durFast } }
+            }
+            Rectangle {
+                visible: root.forMe
+                width: 3
+                height: parent.height
+                color: Theme.tertiary
             }
 
-            Rectangle {
-                id: bubble
-                x: root.fromMe ? parent.width - width - 20 : 20
-                width: Math.min(root.maxBubble, Math.max(content.implicitWidth + 2 * pad, root.bare ? footer.implicitWidth + 16 : 72))
-                height: content.implicitHeight + 2 * padV + (root.bare ? 26 : 0)
-                readonly property int pad: root.bare ? 0 : root.isMedia ? 4 : 10
-                readonly property int padV: root.bare ? 0 : root.isMedia ? 4 : 7
-                radius: 18
-                color: root.bare ? "transparent" : root.bubbleColor
-                topLeftRadius: !root.fromMe && !root.groupedWithOlder ? 6 : 18
-                topRightRadius: root.fromMe && !root.groupedWithOlder ? 6 : 18
+            Avatar {
+                visible: !root.groupedWithOlder
+                x: 22
+                y: 10
+                size: 36
+                jid: root.fromMe ? Hermes.status.meJid || "" : root.isGroup ? "" : Hermes.currentChat
+                name: root.displayName
+                path: !root.fromMe && !root.isGroup ? root.chatAvatar : ""
+            }
 
-                Behavior on width { enabled: false; NumberAnimation {} }
+            // Follow-up rows: time in the gutter on hover; your ticks otherwise
+            Text {
+                visible: root.groupedWithOlder && hover.hovered
+                x: 8
+                width: root.gutter - 18
+                y: 3
+                horizontalAlignment: Text.AlignRight
+                text: F.clock(root.ts)
+                color: Theme.fgSurfaceVariant
+                font.family: Theme.monoFont
+                font.pixelSize: 10
+                lineHeight: 1.6
+            }
+            Ticks {
+                visible: root.groupedWithOlder && root.fromMe && !hover.hovered && !root.revoked
+                x: root.gutter - 26
+                y: 5
+                status: root.status
+                size: 14
+            }
 
-                ColumnLayout {
-                    id: content
-                    x: bubble.pad
-                    y: bubble.padV
-                    width: bubble.width - 2 * bubble.pad
-                    spacing: 4
+            ColumnLayout {
+                id: content
+                x: root.gutter
+                y: root.groupedWithOlder ? 2 : 10
+                width: root.maxBubble
+                spacing: 4
 
-                    // Sender name in groups
+                // Name · time · ticks · edited
+                Row {
+                    visible: !root.groupedWithOlder
+                    spacing: 8
                     Text {
-                        visible: root.showName && !root.bare
-                        Layout.leftMargin: root.isMedia ? 6 : 0
-                        Layout.topMargin: root.isMedia ? 2 : 0
-                        text: root.senderName
-                        color: Theme.nameColor(root.sender)
+                        id: nameText
+                        text: root.displayName
+                        color: root.nameInk
                         font.family: Theme.font
-                        font.pixelSize: 13
+                        font.pixelSize: 14
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
-                        Layout.maximumWidth: root.maxBubble - 24
+                        width: Math.min(implicitWidth, root.maxBubble - 120)
                     }
+                    Text {
+                        anchors.baseline: nameText.baseline
+                        text: F.clock(root.ts)
+                        color: Theme.fgSurfaceVariant
+                        font.family: Theme.monoFont
+                        font.pixelSize: 11
+                    }
+                    Ticks {
+                        visible: root.fromMe && !root.revoked
+                        anchors.verticalCenter: parent.verticalCenter
+                        status: root.status
+                        size: 14
+                    }
+                }
 
-                    // Quoted reply
+                // Quoted reply: an indented excerpt with a rule
+                Item {
+                    visible: root.quotedId !== "" && !root.revoked
+                    Layout.preferredWidth: Math.min(root.maxBubble, Math.max(quoteName.implicitWidth, quoteBody.implicitWidth) + 16)
+                    implicitHeight: quoteCol.implicitHeight + 4
                     Rectangle {
-                        visible: root.quotedId !== "" && !root.revoked
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: Math.min(root.maxBubble - 24, Math.max(quoteName.implicitWidth, quoteBody.implicitWidth) + 22)
-                        implicitHeight: quoteCol.implicitHeight + 12
-                        radius: 10
-                        color: Theme.alpha(root.inkColor, 0.08)
-                        clip: true
-                        Rectangle {
-                            width: 4
-                            height: parent.height
-                            color: Theme.nameColor(root.quotedSender || "you")
-                        }
-                        Column {
-                            id: quoteCol
-                            x: 12
-                            y: 6
-                            width: parent.width - 20
-                            spacing: 2
-                            Text {
-                                id: quoteName
-                                text: root.quotedSender || "Message"
-                                color: Theme.nameColor(root.quotedSender || "you")
-                                font.family: Theme.font
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                width: Math.min(implicitWidth, parent.width)
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                id: quoteBody
-                                text: root.quotedText
-                                color: root.subColor
-                                font.family: Theme.font
-                                font.pixelSize: 13
-                                maximumLineCount: 3
-                                wrapMode: Text.Wrap
-                                elide: Text.ElideRight
-                                width: Math.min(implicitWidth, parent.width)
-                            }
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.quoteClicked(root.quotedId)
-                        }
+                        width: 3
+                        height: parent.height
+                        radius: 1.5
+                        color: Theme.alpha(root.quotedSender === "You" ? Theme.primary : Theme.nameColor(root.quotedSender || "?"), 0.8)
                     }
-
-                    // Media / special content
-                    Loader {
-                        id: mediaLoader
-                        Layout.alignment: Qt.AlignLeft
-                        active: !root.revoked && root.type !== "text"
-                        visible: active
-                        sourceComponent: {
-                            switch (root.type) {
-                            case "image":
-                            case "gif":
-                            case "video": return visualComp;
-                            case "sticker": return stickerComp;
-                            case "voice":
-                            case "audio": return audioComp;
-                            case "document": return docComp;
-                            case "location": return locationComp;
-                            case "contact": return contactComp;
-                            case "poll": return pollComp;
-                            }
-                            return null;
-                        }
-                    }
-
-                    // Text body (captions too)
-                    TextEdit {
-                        id: body
-                        visible: (root.text !== "" && root.type !== "poll" && root.type !== "contact" && root.type !== "location") || root.revoked
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: Math.min(root.maxBubble - 2 * bubble.pad - (root.isMedia ? 12 : 0), measure.implicitWidth + 1)
-                        Layout.leftMargin: root.isMedia ? 6 : 0
-                        Layout.rightMargin: root.isMedia ? 6 : 0
-                        readOnly: true
-                        selectByMouse: true
-                        wrapMode: TextEdit.Wrap
-                        textFormat: TextEdit.RichText
-                        color: root.revoked ? root.subColor : root.inkColor
-                        selectionColor: Theme.primary
-                        selectedTextColor: Theme.fgPrimary
-                        font.family: Theme.font
-                        font.pixelSize: root.bare ? 44 : 15
-                        font.italic: root.revoked
-                        text: root.revoked
-                            ? (root.fromMe ? "🚫 You deleted this message" : "🚫 This message was deleted") + root.footerReserve
-                            : F.richText(root.text, Theme.primary, Theme.alpha(root.inkColor, 0.1)) + (root.bare ? "" : root.footerReserve)
-                        onLinkActivated: link => Qt.openUrlExternally(link)
-                        HoverHandler {
-                            enabled: body.hoveredLink !== ""
-                            cursorShape: Qt.PointingHandCursor
-                        }
+                    Column {
+                        id: quoteCol
+                        x: 12
+                        y: 2
+                        width: parent.width - 12
+                        spacing: 1
                         Text {
-                            id: measure
-                            visible: false
-                            textFormat: Text.RichText
-                            font: body.font
-                            text: body.text
-                        }
-                    }
-
-                    Item {
-                        // Space for the footer when there's no text to float it in.
-                        visible: !body.visible && !root.isMedia && root.type !== "sticker"
-                        implicitHeight: 14
-                        implicitWidth: footer.implicitWidth
-                    }
-                }
-
-                // Time · edited · star · ticks
-                Rectangle {
-                    id: footerBg
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    anchors.rightMargin: root.isMedia || root.bare ? 8 : 10
-                    anchors.bottomMargin: root.bare ? 2 : root.isMedia ? 8 : 5
-                    width: footer.implicitWidth + (overlay ? 12 : 0)
-                    height: footer.implicitHeight + (overlay ? 4 : 0)
-                    radius: height / 2
-                    readonly property bool overlay: (root.isMedia && !body.visible) || root.bare
-                    color: overlay ? Theme.alpha("#000000", 0.45) : "transparent"
-                    Row {
-                        id: footer
-                        anchors.centerIn: parent
-                        spacing: 3
-                        readonly property color ink: footerBg.overlay ? "#ffffff" : root.subColor
-                        Text {
-                            visible: root.edited && !root.revoked
-                            text: "edited"
-                            color: footer.ink
+                            id: quoteName
+                            text: root.quotedSender || "Message"
+                            color: Theme.fgSurfaceVariant
                             font.family: Theme.font
-                            font.pixelSize: 11
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        Icon {
-                            visible: root.starred
-                            name: "star"
-                            filled: true
-                            size: 13
-                            color: footer.ink
-                            anchors.verticalCenter: parent.verticalCenter
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                            width: Math.min(implicitWidth, parent.width)
+                            elide: Text.ElideRight
                         }
                         Text {
-                            text: F.clock(root.ts)
-                            color: footer.ink
+                            id: quoteBody
+                            text: root.quotedText
+                            color: Theme.fgSurfaceVariant
                             font.family: Theme.font
-                            font.pixelSize: 11
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        Ticks {
-                            visible: root.fromMe && !root.revoked
-                            status: root.status
-                            base: footer.ink
-                            size: 15
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-                }
-
-                // Hover action: open message menu
-                Rectangle {
-                    id: chevron
-                    visible: hover.hovered
-                    anchors.top: parent.top
-                    anchors.right: root.fromMe ? undefined : parent.right
-                    anchors.left: root.fromMe ? parent.left : undefined
-                    anchors.margins: -34
-                    anchors.topMargin: 2
-                    width: 28
-                    height: 28
-                    radius: 14
-                    color: Theme.surfaceContainerHighest
-                    Row {
-                        anchors.centerIn: parent
-                        Icon {
-                            name: "add_reaction"
-                            size: 17
+                            font.pixelSize: 13
+                            maximumLineCount: 2
+                            wrapMode: Text.Wrap
+                            elide: Text.ElideRight
+                            width: Math.min(implicitWidth, parent.width)
                         }
                     }
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.menuRequested(chevron, 0, chevron.height + 4)
+                        onClicked: root.quoteClicked(root.quotedId)
                     }
                 }
-                HoverHandler {
-                    id: hover
-                    margin: 40
+
+                // Media / special content
+                Loader {
+                    id: mediaLoader
+                    Layout.alignment: Qt.AlignLeft
+                    Layout.topMargin: 2
+                    active: !root.revoked && root.type !== "text"
+                    visible: active
+                    sourceComponent: {
+                        switch (root.type) {
+                        case "image":
+                        case "gif":
+                        case "video": return visualComp;
+                        case "sticker": return stickerComp;
+                        case "voice":
+                        case "audio": return audioComp;
+                        case "document": return docComp;
+                        case "location": return locationComp;
+                        case "contact": return contactComp;
+                        case "poll": return pollComp;
+                        }
+                        return null;
+                    }
                 }
-                TapHandler {
-                    acceptedButtons: Qt.RightButton
-                    onTapped: (pt, button) => root.menuRequested(bubble, pt.position.x, pt.position.y)
+
+                // Text body (captions too)
+                TextEdit {
+                    id: body
+                    visible: (root.text !== "" && root.type !== "poll" && root.type !== "contact" && root.type !== "location") || root.revoked
+                    Layout.fillWidth: true
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: TextEdit.Wrap
+                    textFormat: TextEdit.RichText
+                    color: root.revoked ? Theme.fgSurfaceVariant : Theme.fgSurface
+                    selectionColor: Theme.primary
+                    selectedTextColor: Theme.fgPrimary
+                    font.family: Theme.font
+                    font.pixelSize: root.bare ? 40 : 15
+                    font.italic: root.revoked
+                    readonly property string suffix: (root.edited && !root.revoked ? " <span style='font-size:11px; color:" + Theme.fgSurfaceVariant + "'>(edited)</span>" : "")
+                        + (root.starred ? " <span style='font-size:12px; color:" + Theme.tertiary + "'>★</span>" : "")
+                    text: root.revoked
+                        ? (root.fromMe ? "You deleted this message" : "This message was deleted")
+                        : F.richText(root.text, Theme.primary, Theme.alpha(Theme.fgSurface, 0.1)) + suffix
+                    onLinkActivated: link => Qt.openUrlExternally(link)
+                    HoverHandler {
+                        enabled: body.hoveredLink !== ""
+                        cursorShape: Qt.PointingHandCursor
+                    }
+                }
+
+                // Reactions: click one to add or remove yours
+                Flow {
+                    visible: root.reactionList.length > 0
+                    Layout.fillWidth: true
+                    Layout.topMargin: 2
+                    spacing: 6
+                    Repeater {
+                        model: {
+                            const out = [];
+                            const idx = {};
+                            for (const r of root.reactionList) {
+                                if (idx[r.emoji] === undefined) {
+                                    idx[r.emoji] = out.length;
+                                    out.push({ emoji: r.emoji, count: 0, mine: false, names: [] });
+                                }
+                                const e = out[idx[r.emoji]];
+                                e.count++;
+                                e.names.push(r.fromMe || r.sender === Hermes.status.meJid ? "You" : (r.senderName || "").split(" ")[0]);
+                                if (r.fromMe || r.sender === Hermes.status.meJid)
+                                    e.mine = true;
+                            }
+                            return out;
+                        }
+                        Rectangle {
+                            required property var modelData
+                            height: 26
+                            width: chip.implicitWidth + 18
+                            radius: 13
+                            color: modelData.mine ? Theme.alpha(Theme.primary, 0.18) : Theme.surfaceContainerHigh
+                            border.width: 1
+                            border.color: modelData.mine ? Theme.alpha(Theme.primary, 0.6) : "transparent"
+                            Row {
+                                id: chip
+                                anchors.centerIn: parent
+                                spacing: 5
+                                Text { text: modelData.emoji; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
+                                Text {
+                                    visible: modelData.count > 1
+                                    text: modelData.count
+                                    color: modelData.mine ? Theme.primary : Theme.fgSurfaceVariant
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
+                            HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
+                            Tip { shown: chipHover.hovered; text: modelData.names.join(", ") }
+                            TapHandler { onTapped: Hermes.react(root.id, modelData.mine ? "" : modelData.emoji) }
+                        }
+                    }
                 }
             }
 
-            // Reaction chips
-            Row {
-                id: reactionsRow
-                visible: root.reactionList.length > 0
-                anchors.top: bubble.bottom
-                anchors.topMargin: -8
-                x: root.fromMe ? bubble.x + bubble.width - width - 12 : bubble.x + 12
-                spacing: 4
-                Rectangle {
-                    height: 24
-                    width: reactText.implicitWidth + 14
-                    radius: 12
-                    color: Theme.surfaceContainerHighest
-                    border.width: 2
-                    border.color: Theme.surface
-                    Text {
-                        id: reactText
-                        anchors.centerIn: parent
-                        font.family: Theme.font
-                        font.pixelSize: 13
-                        color: Theme.fgSurfaceVariant
-                        text: {
-                            const counts = {};
-                            for (const r of root.reactionList)
-                                counts[r.emoji] = (counts[r.emoji] || 0) + 1;
-                            const keys = Object.keys(counts).slice(0, 4);
-                            return keys.join("") + (root.reactionList.length > 1 ? " " + root.reactionList.length : "");
-                        }
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.menuRequested(reactionsRow, 0, 28)
-                    }
+            // Hover toolbar
+            Rectangle {
+                visible: hover.hovered && !root.revoked
+                anchors.right: parent.right
+                anchors.rightMargin: 20
+                y: -12
+                z: 5
+                height: 34
+                width: tools.implicitWidth + 8
+                radius: 10
+                color: Theme.surfaceContainerHigh
+                border.width: 1
+                border.color: Theme.alpha(Theme.outlineVariant, 0.6)
+                Row {
+                    id: tools
+                    anchors.centerIn: parent
+                    IconButton { size: 30; iconSize: 18; icon: "add_reaction"; tip: "React"; onClicked: root.menuRequested(this, 0, height + 4) }
+                    IconButton { size: 30; iconSize: 18; icon: "reply"; tip: "Reply"; onClicked: root.replyRequested() }
+                    IconButton { size: 30; iconSize: 18; icon: "alarm"; tip: "Remind me"; onClicked: root.remindRequested() }
+                    IconButton { size: 30; iconSize: 18; icon: "more_horiz"; tip: "More"; onClicked: root.menuRequested(this, 0, height + 4) }
                 }
             }
         }

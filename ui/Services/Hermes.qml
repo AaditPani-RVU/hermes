@@ -37,6 +37,8 @@ Singleton {
     signal toast(string text, bool error)
     signal openChatRequested(string jid)
     signal incomingCall(string name, bool video)
+    signal messagesLoaded
+    property string jumpTo: "" // message to scroll to once the open chat loads (reminders)
 
     readonly property ListModel chats: ListModel {}
     // Triage view of `chats`: header rows (kind "header") followed by their chats.
@@ -172,7 +174,8 @@ Singleton {
             bucket: c.bucket || "done",
             doneTs: c.doneTs || 0,
             snoozeUntil: c.snoozeUntil || 0,
-            snoozeMsg: c.snoozeMsg || ""
+            snoozeMsg: c.snoozeMsg || "",
+            snoozeNote: c.snoozeNote || ""
         };
     }
 
@@ -438,6 +441,8 @@ Singleton {
         }
         currentChat = jid;
         reachedTop = false;
+        const ci = chatIndex(jid);
+        jumpTo = ci >= 0 ? chats.get(ci).snoozeMsg : "";
         messages.clear();
         updateCurrentInfo();
         loadMessages(jid);
@@ -461,6 +466,7 @@ Singleton {
             for (let i = res.length - 1; i >= 0; i--)
                 messages.append(msgFields(res[i]));
             reachedTop = res.length < 60;
+            messagesLoaded();
         });
     }
 

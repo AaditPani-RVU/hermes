@@ -281,9 +281,19 @@ the home view groups chats by what they need from you, and chats are cleared, no
   `Ctrl+S` snooze, `Ctrl+Shift+E` undo, `Ctrl+Tab` next in inbox, `Esc` back to the list.
 - Pre-migration DB backup: `~/.local/share/hermes/backup-pre-triage-20261009-1836.db`.
 
+### 2026-10-09: Phase A, finish the redesign
+- **Transcript conversation view:** `MessageBubble.qml` → `MessageRow.qml`. Left-aligned rows (avatar + name + time on the
+  first of a run, follow-ups stacked with time/ticks in the gutter), day dividers as rules, no wallpaper. Rows that
+  @-mention or reply to you get a tertiary accent bar. Hover toolbar: react, reply, remind me, more. Reaction chips toggle yours.
+  Group senders use coloured initials (no per-member profile-picture fetches, to avoid hammering WhatsApp).
+- **Composer:** outlined box, "Message <chat>", send/mic button inside the box.
+- **Snooze:** typed times via `Format.parseWhen` ("in 2h", "tmr 14:00", "fri 9am", "18:30"); start typing in the dialog.
+- **Reminders:** `chat.snoozeNote` (preview of `snooze_msg`) shows in the inbox row with ⏰; opening jumps to and highlights it.
+- **Clavis bar:** pill counts `needsYou` (reply + mention), popup lists those first with an @ for mentions,
+  header says "N need you · M FYI" / "Inbox zero", middle-click = done. Clavis must be restarted to load it
+  (inotify watch limit is exhausted on this machine, so Quickshell can't hot-reload).
+
 **Not done yet / next:**
-- [ ] Triage polish: bar module should show `needsYou` instead of unread; reminders list view; custom snooze time
-- [ ] Conversation view still uses WhatsApp-style bubbles; consider a denser transcript layout to match the inbox
 - [x] First real pairing (2026-10-09): QR link works
 - [x] Saved contact names: newer phones send them in history sync `InlineContacts` / DM `DisplayName`, which whatsmeow ignores; hermesd now stores them (needs a re-link to receive a fresh bootstrap sync)
 - [ ] End-to-end testing on the live account

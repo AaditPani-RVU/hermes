@@ -4,8 +4,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Lightweight hermesd client for the Clavis bar: unread counts, the latest
-// chats, quick replies and focus mode. The full UI lives in `hermes-ui`.
+// Lightweight hermesd client for the Clavis bar: how many chats need you, the
+// chats to look at first, quick replies and focus mode. The full UI lives in `hermes-ui`.
 Singleton {
     id: root
 
@@ -19,10 +19,13 @@ Singleton {
     property int unreadMessages: 0
     property bool focusActive: false
     property var recent: []
+    // Triage counts from the daemon's buckets (reply + mention = needs you).
+    property int needsYou: 0
+    property int fyi: 0
 
     property int _nextId: 1
     property var _pending: ({})
-    property var _all: ({}) // jid -> chat, only the newest few are kept
+    property var _all: ({}) // jid -> chat (non-archived)
 
     function call(method, params, cb) {
         if (!sock.connected) {
@@ -64,18 +67,38 @@ Singleton {
         }, res => {
             if (!res)
                 return;
-            const sorted = res.slice().sort((a, b) => b.lastTs - a.lastTs).slice(0, root.recentCount * 2);
             const map = {};
-            for (const c of sorted)
+            for (const c of res)
                 map[c.jid] = c;
             root._all = map;
             root._publish();
         });
     }
 
+    // Chats that need you come first (like the inbox), then the most recent.
+    function _rank(c) {
+        return c.bucket === "reply" || c.bucket === "mention" ? 0 : c.bucket === "fyi" ? 1 : 2;
+    }
+
     function _publish() {
-        root.recent = Object.values(root._all).filter(c => !c.archived && c.lastTs > 0).sort((a, b) => b.lastTs
-                                                                                               - a.lastTs).slice(0, root.recentCount);
+        const all = Object.values(root._all).filter(c => !c.archived && c.lastTs > 0);
+        let needs = 0, fyi = 0;
+        for (const c of all) {
+            if (c.bucket === "reply" || c.bucket === "mention")
+                needs++;
+            else if (c.bucket === "fyi")
+                fyi++;
+        }
+        root.needsYou = needs;
+        root.fyi = fyi;
+        root.recent = all.sort((a, b) => (root._rank(a) - root._rank(b)) || (b.lastTs - a.lastTs)).slice(0, root.recentCount);
+    }
+
+    function markDone(jid) {
+        call("chats.done", {
+            "chat": jid,
+            "value": true
+        });
     }
 
     function _upsert(chat) {

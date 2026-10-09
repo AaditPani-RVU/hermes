@@ -219,10 +219,13 @@ Rectangle {
 
             Rectangle {
                 id: box
-                width: parent.width - sendBtn.width - parent.spacing
+                width: parent.width
                 height: Math.max(52, Math.min(180, input.contentHeight + 30))
-                radius: 26
-                color: Theme.surfaceContainerHigh
+                radius: Theme.radiusMd
+                color: Theme.surfaceContainerLow
+                border.width: 1
+                border.color: input.activeFocus ? Theme.alpha(Theme.primary, 0.7) : Theme.alpha(Theme.outlineVariant, 0.8)
+                Behavior on border.color { ColorAnimation { duration: Theme.durFast } }
                 anchors.bottom: parent.bottom
                 Behavior on height { NumberAnimation { duration: Theme.durFast } }
 
@@ -247,11 +250,33 @@ Rectangle {
                     toggled: attachMenu.opened
                     onClicked: attachMenu.opened ? attachMenu.close() : attachMenu.openAt(attachBtn, 0, -attachMenu.implicitHeight - 8)
                 }
+                IconButton {
+                    id: sendBtn
+                    anchors.right: parent.right
+                    anchors.rightMargin: 8
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 8
+                    size: 36
+                    iconSize: 20
+                    readonly property bool hasText: input.text.trim() !== ""
+                    filled: hasText || root.editing
+                    container: hasText || root.editing ? Theme.primary : "transparent"
+                    tint: hasText || root.editing ? Theme.fgPrimary : Theme.fgSurfaceVariant
+                    icon: root.editing ? "check" : hasText ? "arrow_upward" : "mic"
+                    tip: root.editing ? "Save edit" : hasText ? "Send (Enter) · Ctrl+Enter to schedule" : "Record voice message"
+                    onClicked: {
+                        if (hasText || root.editing)
+                            root.send();
+                        else
+                            Hermes.act("voice.start", { chat: Hermes.currentChat });
+                    }
+                    onRightClicked: if (hasText) root.scheduleRequested(input.text)
+                }
                 ScrollView {
                     anchors.left: attachBtn.right
                     anchors.leftMargin: 4
-                    anchors.right: parent.right
-                    anchors.rightMargin: 16
+                    anchors.right: sendBtn.left
+                    anchors.rightMargin: 6
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     anchors.topMargin: 6
@@ -260,7 +285,7 @@ Rectangle {
                         id: input
                         background: null
                         color: Theme.fgSurface
-                        placeholderText: root.editing ? "Edit message" : Hermes.currentInfo && Hermes.currentInfo.ephemeral > 0 ? "Disappearing message" : "Message"
+                        placeholderText: root.editing ? "Edit message" : (Hermes.currentInfo && Hermes.currentInfo.ephemeral > 0 ? "Disappearing message to " : "Message ") + (Hermes.currentInfo ? Hermes.currentInfo.name : "")
                         placeholderTextColor: Theme.fgSurfaceVariant
                         selectionColor: Theme.primary
                         selectedTextColor: Theme.fgPrimary
@@ -307,25 +332,6 @@ Rectangle {
                 }
             }
 
-            IconButton {
-                id: sendBtn
-                anchors.bottom: parent.bottom
-                size: 52
-                iconSize: 24
-                filled: true
-                container: Theme.primary
-                tint: Theme.fgPrimary
-                readonly property bool hasText: input.text.trim() !== ""
-                icon: root.editing ? "check" : hasText ? "send" : "mic"
-                tip: root.editing ? "Save edit" : hasText ? "Send (Enter) · Ctrl+Enter to schedule" : "Record voice message"
-                onClicked: {
-                    if (hasText || root.editing)
-                        root.send();
-                    else
-                        Hermes.act("voice.start", { chat: Hermes.currentChat });
-                }
-                onRightClicked: if (hasText) root.scheduleRequested(input.text)
-            }
         }
     }
 

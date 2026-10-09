@@ -157,10 +157,9 @@ PopupWindow {
                         Text {
                             text: !HermesBarService.daemonUp ? qsTr("Daemon not running") : HermesBarService.focusActive
                                                               ? qsTr("Focus mode · only VIPs notify") :
-                                                                HermesBarService.unreadChats > 0 ? qsTr("%1 unread chats · %2 messages").arg(
-                                                                                                     HermesBarService.unreadChats).arg(
-                                                                                                     HermesBarService.unreadMessages) :
-                                                                                                 qsTr("All caught up")
+                                                                HermesBarService.needsYou > 0 ? qsTr("%1 need you").arg(HermesBarService.needsYou)
+                                                                    + (HermesBarService.fyi > 0 ? qsTr(" · %1 FYI").arg(HermesBarService.fyi) : "") :
+                                                                qsTr("Inbox zero")
                             font.family: Fonts.ui
                             font.pixelSize: 12
                             color: Appearance.colors.colSubtext
@@ -344,6 +343,13 @@ PopupWindow {
                             color: Appearance.colors.colOnLayer0
                         }
 
+                        MaterialSymbol {
+                            visible: entry.chat.bucket === "mention"
+                            text: "alternate_email"
+                            iconSize: 14
+                            color: Appearance.colors.colTertiary
+                        }
+
                         Text {
                             text: root.timeLabel(entry.chat.lastTs)
                             font.family: Fonts.ui
@@ -512,7 +518,8 @@ PopupWindow {
                 if (event.button === Qt.LeftButton) {
                     root.replyJid = entry.replying ? "" : entry.chat.jid;
                 } else if (event.button === Qt.MiddleButton) {
-                    HermesBarService.markRead(entry.chat.jid);
+                    // Same as "e" in the inbox: clear it (marks read too).
+                    HermesBarService.markDone(entry.chat.jid);
                 } else {
                     HermesBarService.openChat(entry.chat.jid);
                     root.close();

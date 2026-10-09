@@ -24,6 +24,7 @@ Item {
     required property string avatarPath
     required property string draft
     required property real snoozeUntil
+    required property string snoozeNote
 
     property bool cursor: false // keyboard selection
     readonly property bool header: kind === "header"
@@ -180,6 +181,8 @@ Item {
                         return "";
                     if (row.typingInfo)
                         return row.typingInfo.recording ? "recording audio…" : "typing…";
+                    if (row.snoozeNote !== "")
+                        return "<font color='" + Theme.tertiary + "'>⏰</font> " + F.escapeHtml(row.snoozeNote);
                     if (row.draft !== "")
                         return "<font color='" + Theme.error + "'>Draft:</font> " + F.escapeHtml(row.draft);
                     const p = F.escapeHtml(row.lastPreview);

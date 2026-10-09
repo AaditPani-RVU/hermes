@@ -4,7 +4,7 @@ import qs.Common
 import qs.Components
 import qs.Widgets.common
 
-// Bar pill: WhatsApp icon + unread count.
+// Bar pill: WhatsApp icon + how many chats need you (the inbox's Needs reply + Mentions).
 // Left click: recent chats with quick reply. Middle click: focus mode.
 // Right click: open the Hermes window.
 Item {
@@ -14,7 +14,7 @@ Item {
     property string edge: "top"
     property bool vertical: false
 
-    readonly property int unread: HermesBarService.unreadChats
+    readonly property int unread: HermesBarService.needsYou
     readonly property bool hasUnread: root.unread > 0 && !HermesBarService.focusActive
     readonly property string iconName: !HermesBarService.daemonUp ? "chat_error" : HermesBarService.focusActive
                                                                     ? "speaker_notes_off" : "chat"
