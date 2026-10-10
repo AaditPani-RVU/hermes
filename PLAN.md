@@ -426,4 +426,4 @@ the home view groups chats by what they need from you, and chats are cleared, no
 **Not done yet / next:**
 - [ ] Live verification: media retry (phone awake), posting a status, group admin actions, receiving live statuses
 - [ ] Polish: smart folders, animations, performance with 100k+ messages
-- [ ] `sudo apt install qt6-image-formats-plugins` for native (animated) WebP stickers
+- [x] `qt6-image-formats-plugins` installed: native (animated) WebP stickers
